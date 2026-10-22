@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="wall" x1="0" y1="0" x2="1200" y2="800" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8FBFAD"/>
+      <stop offset="0.55" stop-color="#4E8A73"/>
+      <stop offset="1" stop-color="#17573F"/>
+    </linearGradient>
+    <linearGradient id="table" x1="560" y1="470" x2="1200" y2="800" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C94036"/>
+      <stop offset="1" stop-color="#8F241E"/>
+    </linearGradient>
+    <linearGradient id="pageL" x1="640" y1="430" x2="830" y2="620" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF7E8"/>
+      <stop offset="1" stop-color="#F3E3C8"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#wall)"/>
+  <ellipse cx="880" cy="430" rx="360" ry="230" fill="#0E4A38" opacity="0.25"/>
+
+  <!-- cành đào -->
+  <g>
+    <path d="M1200 90 Q1030 130 950 90 Q880 58 800 84" stroke="#6B4A35" stroke-width="10" fill="none" stroke-linecap="round"/>
+    <path d="M1010 108 Q990 160 940 176" stroke="#6B4A35" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <g fill="#F6C6D3">
+      <circle cx="1078" cy="86" r="26"/><circle cx="1110" cy="66" r="20"/><circle cx="1046" cy="64" r="17"/>
+      <circle cx="958" cy="92" r="21"/><circle cx="986" cy="74" r="15"/>
+      <circle cx="902" cy="150" r="19"/><circle cx="928" cy="132" r="13"/>
+      <circle cx="838" cy="92" r="15"/>
+    </g>
+    <g fill="#E8B45A">
+      <circle cx="1078" cy="86" r="5"/><circle cx="958" cy="92" r="4"/><circle cx="902" cy="150" r="4"/>
+    </g>
+    <ellipse cx="1002" cy="222" rx="14" ry="8" fill="#F6C6D3" transform="rotate(-24 1002 222)"/>
+    <ellipse cx="1120" cy="300" rx="14" ry="8" fill="#F6C6D3" transform="rotate(18 1120 300)"/>
+  </g>
+
+  <!-- bàn sơn mài đỏ -->
+  <path d="M520 800 L590 500 Q600 462 648 462 L1200 430 L1200 800 Z" fill="url(#table)"/>
+  <path d="M590 500 L1200 468" stroke="#E8B45A" stroke-width="5" opacity="0.7"/>
+
+  <!-- chồng phong bì đỏ -->
+  <g transform="rotate(-7 760 380)">
+    <rect x="668" y="330" width="196" height="118" rx="8" fill="#8F241E"/>
+    <rect x="660" y="318" width="196" height="118" rx="8" fill="#B3352C"/>
+    <path d="M660 318 L758 386 L856 318 L856 336 L758 402 L660 336 Z" fill="#C94036"/>
+    <path d="M690 356 Q724 336 758 356 Q724 376 690 356" stroke="#E8B45A" stroke-width="4" fill="none"/>
+    <circle cx="796" cy="352" r="9" fill="none" stroke="#E8B45A" stroke-width="4"/>
+  </g>
+
+  <!-- đồng tiền vàng -->
+  <g fill="#E8B45A" stroke="#B8862E" stroke-width="4">
+    <circle cx="632" cy="486" r="24"/><circle cx="676" cy="470" r="26"/><circle cx="716" cy="492" r="22"/>
+  </g>
+  <g fill="#17573F">
+    <rect x="624" y="478" width="16" height="16" rx="2"/><rect x="668" y="462" width="16" height="16" rx="2"/><rect x="709" y="485" width="14" height="14" rx="2"/>
+  </g>
+
+  <!-- ấm trà -->
+  <g>
+    <ellipse cx="1046" cy="392" rx="86" ry="66" fill="#0B3D2E"/>
+    <ellipse cx="1046" cy="340" rx="52" ry="16" fill="#0E4A38"/>
+    <rect x="1032" y="312" width="28" height="18" rx="8" fill="#0B3D2E"/>
+    <path d="M966 372 Q930 360 924 330" stroke="#0B3D2E" stroke-width="16" fill="none" stroke-linecap="round"/>
+    <path d="M1126 366 Q1164 350 1162 318" stroke="#0B3D2E" stroke-width="14" fill="none" stroke-linecap="round"/>
+    <path d="M986 344 Q1046 360 1106 344" stroke="#E8B45A" stroke-width="4" fill="none" opacity="0.8"/>
+  </g>
+
+  <!-- sổ mở trên bàn -->
+  <g>
+    <path d="M636 470 Q742 424 846 466 L846 636 Q742 594 636 640 Z" fill="url(#pageL)"/>
+    <path d="M1052 466 Q948 424 846 466 L846 636 Q948 594 1052 640 Z" fill="url(#pageL)"/>
+    <path d="M636 470 Q742 424 846 466 Q948 424 1052 466 L1052 640 Q948 594 846 636 Q742 594 636 640 Z" fill="none" stroke="#8A6B45" stroke-width="7" stroke-linejoin="round"/>
+    <path d="M846 466 L846 636" stroke="#D9C29A" stroke-width="6"/>
+    <g stroke="#C9AE7E" stroke-width="5" stroke-linecap="round">
+      <path d="M668 500 Q742 470 812 494"/>
+      <path d="M668 532 Q742 502 812 526"/>
+      <path d="M668 564 Q742 534 812 558"/>
+      <path d="M668 596 Q742 566 812 590"/>
+      <path d="M880 494 Q950 470 1020 500"/>
+      <path d="M880 526 Q950 502 1020 532"/>
+      <path d="M880 558 Q950 534 1020 564"/>
+      <path d="M880 590 Q950 566 1020 596"/>
+    </g>
+  </g>
+</svg>

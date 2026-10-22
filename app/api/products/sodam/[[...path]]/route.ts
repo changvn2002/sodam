@@ -1,0 +1,258 @@
+import type {
+  SodamEntrySource,
+  SodamEventKind,
+  SodamEventRole,
+  SodamRelationType,
+} from '@prisma/client';
+import * as ai from '@/lib/server/ai.service';
+import { requireUser } from '@/lib/server/auth';
+import { badRequest, notFound } from '@/lib/server/errors';
+import {
+  handle,
+  optEnum,
+  optIntMin0,
+  optString,
+  readJson,
+  reqEnum,
+  reqIntMin0,
+  reqString,
+} from '@/lib/server/http';
+import * as sodam from '@/lib/server/sodam.service';
+import { SODAM_EVENT_KINDS } from '@/lib/server/sodam-event-kinds';
+
+/**
+ * Route handlers replacing the host's NestJS `SodamController`
+ * (server/src/products/sodam/sodam.controller.ts). Same paths, same payloads,
+ * same response shapes — every product endpoint requires the built-in JWT
+ * auth (the standalone equivalent of the host's JwtAuthGuard).
+ */
+
+const EVENT_ROLES = ['HOSTED', 'ATTENDED'] as const;
+const ENTRY_SOURCES = ['VOICE', 'PHOTO', 'MANUAL'] as const;
+const RELATION_TYPES = ['SPOUSE', 'PARENT', 'CHILD', 'SIBLING', 'OTHER'] as const;
+const RETURN_STATUSES = ['OPEN', 'DONE', 'SKIPPED'] as const;
+
+type Ctx = { params: Promise<{ path?: string[] }> };
+
+async function dispatch(req: Request, segments: string[]) {
+  const method = req.method;
+  const [head, bookId, sub, third, fourth] = segments;
+
+  // GET /api/products/sodam — public status (product info + whether AI is configured)
+  if (segments.length === 0 && method === 'GET') {
+    return { product: { name: 'Sổ Đám', slug: 'sodam' }, aiConfigured: ai.aiConfigured() };
+  }
+
+  if (head !== 'books') throw notFound('Route not found');
+
+  const { id: userId } = await requireUser(req);
+
+  // /books
+  if (segments.length === 1) {
+    if (method === 'GET') return sodam.listBooks(userId);
+    if (method === 'POST') {
+      const body = await readJson(req);
+      return sodam.createBook(userId, reqString(body, 'name'));
+    }
+  }
+
+  // /books/join
+  if (segments.length === 2 && sub === 'join' && method === 'POST') {
+    const body = await readJson(req);
+    return sodam.joinBook(userId, reqString(body, 'inviteCode', 3));
+  }
+
+  if (!bookId) throw notFound('Route not found');
+
+  // /books/:bookId/dashboard
+  if (segments.length === 3 && sub === 'dashboard' && method === 'GET') {
+    return sodam.dashboard(bookId, userId);
+  }
+
+  // /books/:bookId/events
+  if (segments.length === 3 && sub === 'events') {
+    if (method === 'GET') return sodam.listEvents(bookId, userId);
+    if (method === 'POST') {
+      const body = await readJson(req);
+      return sodam.createEvent(bookId, userId, {
+        title: reqString(body, 'title'),
+        kind: reqEnum<SodamEventKind>(body, 'kind', SODAM_EVENT_KINDS),
+        role: reqEnum<SodamEventRole>(body, 'role', EVENT_ROLES),
+        occurredOn: optString(body, 'occurredOn'),
+        note: optString(body, 'note'),
+      });
+    }
+  }
+
+  // /books/:bookId/events/:eventId[/close|/entries[/batch|/:entryId]]
+  if (segments.length >= 4 && sub === 'events') {
+    const eventId = third;
+    if (segments.length === 4 && method === 'GET') {
+      return sodam.getEvent(bookId, eventId, userId);
+    }
+    if (segments.length === 5 && fourth === 'close' && method === 'POST') {
+      return sodam.closeEvent(bookId, eventId, userId);
+    }
+    if (segments.length === 5 && fourth === 'entries' && method === 'POST') {
+      const body = await readJson(req);
+      return sodam.createEntry(bookId, eventId, userId, {
+        personName: reqString(body, 'personName'),
+        amountVnd: reqIntMin0(body, 'amountVnd'),
+        source: optEnum<SodamEntrySource>(body, 'source', ENTRY_SOURCES),
+        note: optString(body, 'note'),
+        rawText: optString(body, 'rawText'),
+        clientMutationId: optString(body, 'clientMutationId'),
+      });
+    }
+    if (segments.length === 6 && fourth === 'entries' && third !== undefined) {
+      const entryId = segments[5];
+      if (entryId === 'batch' && method === 'POST') {
+        const body = await readJson(req);
+        const rowsRaw = body.rows;
+        if (!Array.isArray(rowsRaw)) throw badRequest('rows must be an array');
+        const rows = rowsRaw.map((r) => {
+          const row = (r ?? {}) as Record<string, unknown>;
+          return {
+            personName: reqString(row, 'personName'),
+            amountVnd: reqIntMin0(row, 'amountVnd'),
+          };
+        });
+        return sodam.batchEntries(bookId, eventId, userId, rows);
+      }
+      if (method === 'PATCH') {
+        const body = await readJson(req);
+        return sodam.updateEntry(bookId, eventId, entryId, userId, {
+          personName: optString(body, 'personName'),
+          amountVnd: optIntMin0(body, 'amountVnd'),
+          note: optString(body, 'note'),
+        });
+      }
+      if (method === 'DELETE') {
+        return sodam.deleteEntry(bookId, eventId, entryId, userId);
+      }
+    }
+  }
+
+  // /books/:bookId/people[/search]
+  if (segments.length === 3 && sub === 'people') {
+    if (method === 'GET') return sodam.listPeople(bookId, userId);
+    if (method === 'POST') {
+      const body = await readJson(req);
+      return sodam.upsertPerson(bookId, userId, {
+        id: optString(body, 'id'),
+        displayName: reqString(body, 'displayName'),
+        note: optString(body, 'note'),
+      });
+    }
+  }
+  if (segments.length === 4 && sub === 'people' && third === 'search' && method === 'GET') {
+    const q = new URL(req.url).searchParams.get('q') ?? '';
+    return sodam.searchPeople(bookId, userId, q);
+  }
+
+  // /books/:bookId/relations
+  if (segments.length === 3 && sub === 'relations') {
+    if (method === 'GET') return sodam.listRelations(bookId, userId);
+    if (method === 'POST') {
+      const body = await readJson(req);
+      return sodam.createRelation(bookId, userId, {
+        fromPersonId: reqString(body, 'fromPersonId'),
+        toPersonId: reqString(body, 'toPersonId'),
+        type: reqEnum<SodamRelationType>(body, 'type', RELATION_TYPES),
+      });
+    }
+  }
+
+  // /books/:bookId/tree
+  if (segments.length === 3 && sub === 'tree' && method === 'GET') {
+    return sodam.tree(bookId, userId);
+  }
+
+  // /books/:bookId/returns[/:returnId]
+  if (segments.length === 3 && sub === 'returns' && method === 'GET') {
+    const status = new URL(req.url).searchParams.get('status') ?? undefined;
+    if (status && !RETURN_STATUSES.includes(status as (typeof RETURN_STATUSES)[number])) {
+      throw badRequest(`status must be one of: ${RETURN_STATUSES.join(', ')}`);
+    }
+    return sodam.listReturns(bookId, userId, status as 'OPEN' | 'DONE' | 'SKIPPED' | undefined);
+  }
+  if (segments.length === 4 && sub === 'returns' && method === 'PATCH') {
+    const body = await readJson(req);
+    return sodam.markReturn(bookId, third, userId, {
+      status: reqEnum(body, 'status', ['DONE', 'SKIPPED'] as const),
+      amountVnd: optIntMin0(body, 'amountVnd'),
+    });
+  }
+
+  // /books/:bookId/export.csv + /import.csv
+  if (segments.length === 3 && sub === 'export.csv' && method === 'GET') {
+    return sodam.exportCsv(bookId, userId);
+  }
+  if (segments.length === 3 && sub === 'import.csv' && method === 'POST') {
+    const body = await readJson(req);
+    return sodam.importCsv(bookId, userId, reqString(body, 'csv', 0));
+  }
+
+  // /books/:bookId/ai/*
+  if (segments.length === 4 && sub === 'ai' && method === 'POST') {
+    const body = third === 'photo' ? null : await readJson(req);
+    if (third === 'parse') {
+      return ai.parseUtterance(bookId, userId, reqString(body!, 'text'));
+    }
+    if (third === 'suggest-amount') {
+      return ai.suggestAmount(bookId, userId, reqString(body!, 'personId'));
+    }
+    if (third === 'photo') {
+      const form = await req.formData().catch(() => null);
+      const file = form?.get('file');
+      if (!(file instanceof File)) return { candidates: [] };
+      const buffer = Buffer.from(await file.arrayBuffer());
+      return ai.photoCandidates(
+        bookId,
+        userId,
+        buffer.toString('base64'),
+        file.type || 'image/jpeg',
+      );
+    }
+  }
+
+  // /books/:bookId/sync
+  if (segments.length === 3 && sub === 'sync' && method === 'POST') {
+    const body = await readJson(req);
+    if (!Array.isArray(body.mutations)) throw badRequest('mutations must be an array');
+    const mutations = body.mutations.map((m) => {
+      const mut = (m ?? {}) as Record<string, unknown>;
+      if (typeof mut.clientMutationId !== 'string' || typeof mut.type !== 'string') {
+        throw badRequest('each mutation needs clientMutationId and type strings');
+      }
+      return {
+        clientMutationId: mut.clientMutationId,
+        type: mut.type,
+        payload: (mut.payload ?? {}) as Record<string, unknown>,
+      };
+    });
+    return sodam.sync(bookId, userId, mutations);
+  }
+
+  throw notFound('Route not found');
+}
+
+export async function GET(req: Request, ctx: Ctx) {
+  const { path = [] } = await ctx.params;
+  return handle(() => dispatch(req, path));
+}
+
+export async function POST(req: Request, ctx: Ctx) {
+  const { path = [] } = await ctx.params;
+  return handle(() => dispatch(req, path));
+}
+
+export async function PATCH(req: Request, ctx: Ctx) {
+  const { path = [] } = await ctx.params;
+  return handle(() => dispatch(req, path));
+}
+
+export async function DELETE(req: Request, ctx: Ctx) {
+  const { path = [] } = await ctx.params;
+  return handle(() => dispatch(req, path));
+}

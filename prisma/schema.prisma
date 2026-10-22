@@ -1,0 +1,200 @@
+// Sổ Đám — standalone schema.
+// Ported 1:1 from the host monorepo's `server/prisma/sodam.prisma.fragment`
+// (same models, same enums), plus a minimal built-in `User` model so the
+// standalone ships with its own JWT auth instead of the host's account system.
+// `SodamBookMember.userId` pointed at the host's User table there; here it
+// resolves to the local User model below.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Minimal account for the built-in auth (register/login → JWT bearer token).
+model User {
+  id           String            @id @default(cuid())
+  email        String            @unique
+  name         String            @default("")
+  passwordHash String
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  memberships  SodamBookMember[]
+}
+
+enum SodamMemberRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+enum SodamEventKind {
+  CUOI
+  DAM_HOI
+  MA
+  GIO
+  MUNG_THO
+  THOI_NOI
+  DAY_THANG
+  TAN_GIA
+  KHAI_TRUONG
+  SINH_NHAT
+  MUNG_TUOI
+  TOT_NGHIEP
+  KHAC
+}
+
+enum SodamEventRole {
+  HOSTED
+  ATTENDED
+}
+
+enum SodamEventStatus {
+  OPEN
+  CLOSED
+}
+
+enum SodamEntrySource {
+  VOICE
+  PHOTO
+  MANUAL
+}
+
+enum SodamReturnStatus {
+  OPEN
+  DONE
+  SKIPPED
+}
+
+enum SodamRelationType {
+  SPOUSE
+  PARENT
+  CHILD
+  SIBLING
+  OTHER
+}
+
+model SodamBook {
+  id         String            @id @default(cuid())
+  name       String
+  inviteCode String            @unique
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  members    SodamBookMember[]
+  people     SodamPerson[]
+  events     SodamEvent[]
+  returns    SodamReturnItem[]
+}
+
+model SodamBookMember {
+  id        String          @id @default(cuid())
+  bookId    String
+  book      SodamBook       @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      SodamMemberRole @default(EDITOR)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([bookId, userId])
+  @@index([userId])
+}
+
+model SodamPerson {
+  id            String                @id @default(cuid())
+  bookId        String
+  book          SodamBook             @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  displayName   String
+  note          String                @default("")
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  entries       SodamEntry[]
+  returns       SodamReturnItem[]
+  relationsFrom SodamPersonRelation[] @relation("SodamRelFrom")
+  relationsTo   SodamPersonRelation[] @relation("SodamRelTo")
+
+  @@index([bookId, displayName])
+}
+
+model SodamPersonRelation {
+  id           String            @id @default(cuid())
+  fromPersonId String
+  fromPerson   SodamPerson       @relation("SodamRelFrom", fields: [fromPersonId], references: [id], onDelete: Cascade)
+  toPersonId   String
+  toPerson     SodamPerson       @relation("SodamRelTo", fields: [toPersonId], references: [id], onDelete: Cascade)
+  type         SodamRelationType
+  createdAt    DateTime          @default(now())
+
+  @@unique([fromPersonId, toPersonId, type])
+  @@index([toPersonId])
+}
+
+model SodamEvent {
+  id         String           @id @default(cuid())
+  bookId     String
+  book       SodamBook        @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  title      String
+  kind       SodamEventKind   @default(CUOI)
+  role       SodamEventRole
+  status     SodamEventStatus @default(OPEN)
+  occurredOn DateTime         @default(now())
+  note       String           @default("")
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  entries    SodamEntry[]
+  returns    SodamReturnItem[]
+
+  @@index([bookId, occurredOn])
+  @@index([bookId, status])
+}
+
+model SodamEntry {
+  id               String           @id @default(cuid())
+  eventId          String
+  event            SodamEvent       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  personId         String?
+  person           SodamPerson?     @relation(fields: [personId], references: [id], onDelete: SetNull)
+  personName       String
+  amountVnd        Int
+  source           SodamEntrySource @default(MANUAL)
+  rawText          String?
+  note             String           @default("")
+  clientMutationId String?          @unique
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([eventId, createdAt])
+  @@index([personId])
+}
+
+model SodamReturnItem {
+  id                 String            @id @default(cuid())
+  bookId             String
+  book               SodamBook         @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  personId           String
+  person             SodamPerson       @relation(fields: [personId], references: [id], onDelete: Cascade)
+  fromEventId        String
+  fromEvent          SodamEvent        @relation(fields: [fromEventId], references: [id], onDelete: Cascade)
+  status             SodamReturnStatus @default(OPEN)
+  suggestedAmountVnd Int?
+  doneAmountVnd      Int?
+  doneEventId        String?
+  doneAt             DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([bookId, status])
+  @@index([personId, status])
+}
+
+model SodamSyncCursor {
+  id               String   @id @default(cuid())
+  bookId           String
+  clientMutationId String   @unique
+  createdAt        DateTime @default(now())
+
+  @@index([bookId])
+}
