@@ -17,9 +17,9 @@ code (or the share link) with family so everyone writes in the same book.
 Repository: https://github.com/changvn2002/sodam
 
 <p align="center">
-  <img src="docs/screenshots/sodam-desktop.png" alt="Sổ Đám — trang chủ sổ đám" width="900">
+  <img src="docs/screenshots/sodam-desktop.png" alt="Sổ Đám — dashboard of a real family book: 12.000.000 ₫ received, 10.000.000 ₫ still held, 10.000.000 ₫ waiting to be returned" width="900">
 </p>
-<p align="center"><em>Your family's ceremony gift ledger — voice input, photo extraction, return-gift tracking.</em></p>
+<p align="center"><em>The live dashboard of a real family book — guests gave 12.000.000 ₫, returns are tracked per guest, and there is no sign-in anywhere.</em></p>
 
 **Tóm tắt (Tiếng Việt):** Sổ Đám là sổ ghi lễ cho các đám của người Việt — cưới, đám hỏi,
 đám tang, giỗ, mừng thọ, tân gia… Ghi ai đã mừng bao nhiêu bằng tay, bằng giọng nói hoặc
@@ -51,15 +51,59 @@ ran as a client module talking to a NestJS backend.
 
 ## 🖼️ Screenshots
 
-Real screenshots of the production deployment at https://sodam-tawny.vercel.app. The app
-opens straight into your books — no sign-in — and a book's data is only reachable with
-its invite code.
+Every screenshot below was captured from the live production deployment at
+https://sodam-tawny.vercel.app (the no-login build) with the app in a **real,
+populated state** — never an empty first-run screen. The book on screen is
+**"Sổ nhà họ Nguyễn"** (invite code `Z2Q7SJD7EXUN`), holding three events: a hosted
+wedding ("Cưới con gái Minh Anh", 18 Oct 2026) with six guests, a hosted death
+anniversary ("Giỗ ông nội"), and a wedding the family attended. Two return gifts have
+already been marked as returned — one of them 200.000 ₫ more than the guest
+originally gave.
 
-| Desktop (1440×900)                            | Mobile (390×844)                          |
-| --------------------------------------------- | ----------------------------------------- |
-| ![Desktop](docs/screenshots/sodam-desktop.png) | ![Mobile](docs/screenshots/sodam-mobile.png) |
-| Social / link-preview size (1280×640)         |                                           |
-| ![Social preview](docs/screenshots/sodam-social.png) |                                    |
+### Dashboard — the whole book at a glance
+
+![Desktop 1440×900 — dashboard of "Sổ nhà họ Nguyễn": 12.000.000 ₫ received, 10.000.000 ₫ still held after returns, 10.000.000 ₫ of returns still open](docs/screenshots/sodam-desktop.png)
+
+_After the three events, guests have given 12.000.000 ₫ in total ("Khách đã mừng").
+2.000.000 ₫ of it is already settled by return gifts, so the book still holds
+10.000.000 ₫ ("Còn giữ"); the family has paid out 2.700.000 ₫ in returns and
+attended-event gifts ("Đã trả / đi"), and 10.000.000 ₫ across 7 guests is still
+waiting to be returned ("Cần trả lễ"). The "Công thức sổ" line spells the maths out —
+including the 200.000 ₫ over-given part._
+
+| Mobile (390×844) | Social / link-preview (1280×640) |
+| --- | --- |
+| ![Mobile — the same dashboard stacked for phones, book totals on top](docs/screenshots/sodam-mobile.png) | ![Social — 1280×640 preview frame of the dashboard](docs/screenshots/sodam-social.png) |
+| _On a phone the four totals stack into a 2×2 grid above the formula line, with the bottom tab bar (Tổng quan / Trả lễ / Người / Họ hàng) always in reach._ | _The 1280×640 frame used when the app link is shared: the totals and the return-gift shortcut (7 guests · 10.000.000 ₫) are visible before the app even opens._ |
+
+### Step by step
+
+**Step 1 — Open the app, create a book.** No account, no sign-in: the home screen
+lists the books kept on this device — each with its invite code — next to the
+create-book and join-by-code panels. Anyone with the code (or the share link) writes
+in the same book. The season card counts 106 days to Tết Nguyên đán (6 Feb 2027).
+
+![Step 1 — home: "Sổ nhà họ Nguyễn" with invite code Z2Q7SJD7EXUN, create/join panels and the wedding-season card](docs/screenshots/gallery-01-tao-so.png)
+
+**Step 2 — Record who gave what.** Inside an event, every guest row shows the amount
+they gave plus its own return-gift form. Settled rows are badged "Đã trả lễ":
+Cậu Tư Lê Văn Đức gave 1.000.000 ₫ and was returned 1.200.000 ₫ — the app flags the
+200.000 ₫ over-given part instead of silently absorbing it into the totals.
+
+![Step 2 — guest ledger of the wedding: gift amounts, per-guest return forms, settled rows](docs/screenshots/gallery-02-ghi-le.png)
+
+**Step 3 — Work the return list.** The "Cần trả lễ" screen collects every open
+obligation across all events — here the gifts from the "Giỗ ông nội" anniversary
+(500.000 ₫, 500.000 ₫ and 1.000.000 ₫) — each with the amount to return, quick-pick
+amounts, and mark-done / skip actions.
+
+![Step 3 — open return obligations with per-guest amounts and mark-done actions](docs/screenshots/gallery-03-tra-le.png)
+
+**Step 4 — Every event keeps its own summary.** The wedding received 10.000.000 ₫
+from 6 guests; 2.000.000 ₫ is settled, 200.000 ₫ was over-given, and the solar date
+(18/10/2026) is shown together with its Vietnamese lunar date (9/9 âm lịch).
+
+![Step 4 — per-event summary for "Cưới con gái Minh Anh": received / kept / settled / over-given](docs/screenshots/gallery-04-tong-ket-su-kien.png)
 
 ## 🛠️ Tech stack
 
