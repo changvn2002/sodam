@@ -10,9 +10,14 @@ export async function handle(fn: () => Promise<unknown>) {
     if (err instanceof HttpError) {
       return NextResponse.json({ message: err.message }, { status: err.status });
     }
+    // Unexpected errors (Prisma/DB/runtime) are logged server-side ONLY.
+    // The client gets a generic Vietnamese message — never the raw error,
+    // which leaks ORM internals (model names, INT4 conversion details).
+    // (W4-F1 retest, 2026-10-23: the overflow 500 shipped the full Prisma
+    // invocation text to anyone who sent amountVnd = 2147483648.)
     console.error(err);
     return NextResponse.json(
-      { message: err instanceof Error ? err.message : 'Internal server error' },
+      { message: 'Đã xảy ra lỗi ở phía máy chủ. Vui lòng thử lại sau.' },
       { status: 500 },
     );
   }
@@ -29,33 +34,59 @@ export async function readJson(req: Request): Promise<Record<string, unknown>> {
 
 // --- Small validators mirroring the original class-validator DTOs -----------
 
-export function reqString(body: Record<string, unknown>, field: string, minLength = 1) {
+export function reqString(
+  body: Record<string, unknown>,
+  field: string,
+  minLength = 1,
+  maxLength?: number,
+) {
   const v = body[field];
   if (typeof v !== 'string' || v.trim().length < minLength) {
     throw badRequest(`${field} must be a string of at least ${minLength} character(s)`);
   }
+  assertMaxLength(field, v, maxLength);
   return v;
 }
 
-export function optString(body: Record<string, unknown>, field: string) {
+export function optString(body: Record<string, unknown>, field: string, maxLength?: number) {
   const v = body[field];
   if (v == null) return undefined;
   if (typeof v !== 'string') throw badRequest(`${field} must be a string`);
+  assertMaxLength(field, v, maxLength);
   return v;
 }
 
-export function reqIntMin0(body: Record<string, unknown>, field: string) {
+function assertMaxLength(field: string, v: string, maxLength?: number) {
+  if (maxLength != null && v.length > maxLength) {
+    throw badRequest(`Trường ${field} quá dài — tối đa ${maxLength} ký tự.`);
+  }
+}
+
+/**
+ * Largest value a Postgres INT4 column holds. Every integer input that is
+ * written to an Int column (entry/return amounts) must stay within it —
+ * past the bound the DB errors out (W4-F1: amountVnd 2147483648 → 500).
+ */
+export const INT4_MAX = 2_147_483_647;
+
+/** Friendly Vietnamese rejection for an out-of-Int4-range amount. */
+export const INT4_MAX_MESSAGE = `Số tiền vượt quá giới hạn cho phép — tối đa ${INT4_MAX.toLocaleString('vi-VN')} đồng.`;
+
+export function reqIntMin0(body: Record<string, unknown>, field: string, max: number = INT4_MAX) {
   const v = body[field];
   if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) {
     throw badRequest(`${field} must be a non-negative integer`);
   }
+  if (v > max) {
+    throw badRequest(INT4_MAX_MESSAGE);
+  }
   return v;
 }
 
-export function optIntMin0(body: Record<string, unknown>, field: string) {
+export function optIntMin0(body: Record<string, unknown>, field: string, max: number = INT4_MAX) {
   const v = body[field];
   if (v == null) return undefined;
-  return reqIntMin0(body, field);
+  return reqIntMin0(body, field, max);
 }
 
 export function reqEnum<T extends string>(

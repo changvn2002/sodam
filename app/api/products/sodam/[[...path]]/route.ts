@@ -49,7 +49,7 @@ async function dispatch(req: Request, segments: string[]) {
   // /books — create a new book (no credential needed: creating grants one)
   if (segments.length === 1 && method === 'POST') {
     const body = await readJson(req);
-    return sodam.createBook(reqString(body, 'name'));
+    return sodam.createBook(reqString(body, 'name', 1, 200));
   }
 
   // /books/mine — resolve the books this device knows, by their codes.
@@ -65,7 +65,7 @@ async function dispatch(req: Request, segments: string[]) {
   // /books/join — open a book by its invite code
   if (segments.length === 2 && bookId === 'join' && method === 'POST') {
     const body = await readJson(req);
-    return sodam.joinBook(reqString(body, 'inviteCode', 3));
+    return sodam.joinBook(reqString(body, 'inviteCode', 3, 64));
   }
 
   // Every route below is scoped to one book: the invite code is the key.
@@ -84,11 +84,11 @@ async function dispatch(req: Request, segments: string[]) {
     if (method === 'POST') {
       const body = await readJson(req);
       return sodam.createEvent(bookId, code, {
-        title: reqString(body, 'title'),
+        title: reqString(body, 'title', 1, 200),
         kind: reqEnum<SodamEventKind>(body, 'kind', SODAM_EVENT_KINDS),
         role: reqEnum<SodamEventRole>(body, 'role', EVENT_ROLES),
-        occurredOn: optString(body, 'occurredOn'),
-        note: optString(body, 'note'),
+        occurredOn: optString(body, 'occurredOn', 100),
+        note: optString(body, 'note', 1000),
       });
     }
   }
@@ -105,12 +105,12 @@ async function dispatch(req: Request, segments: string[]) {
     if (segments.length === 5 && fourth === 'entries' && method === 'POST') {
       const body = await readJson(req);
       return sodam.createEntry(bookId, eventId, code, {
-        personName: reqString(body, 'personName'),
+        personName: reqString(body, 'personName', 1, 200),
         amountVnd: reqIntMin0(body, 'amountVnd'),
         source: optEnum<SodamEntrySource>(body, 'source', ENTRY_SOURCES),
-        note: optString(body, 'note'),
-        rawText: optString(body, 'rawText'),
-        clientMutationId: optString(body, 'clientMutationId'),
+        note: optString(body, 'note', 1000),
+        rawText: optString(body, 'rawText', 2000),
+        clientMutationId: optString(body, 'clientMutationId', 200),
       });
     }
     if (segments.length === 6 && fourth === 'entries' && third !== undefined) {
@@ -122,7 +122,7 @@ async function dispatch(req: Request, segments: string[]) {
         const rows = rowsRaw.map((r) => {
           const row = (r ?? {}) as Record<string, unknown>;
           return {
-            personName: reqString(row, 'personName'),
+            personName: reqString(row, 'personName', 1, 200),
             amountVnd: reqIntMin0(row, 'amountVnd'),
           };
         });
@@ -131,9 +131,9 @@ async function dispatch(req: Request, segments: string[]) {
       if (method === 'PATCH') {
         const body = await readJson(req);
         return sodam.updateEntry(bookId, eventId, entryId, code, {
-          personName: optString(body, 'personName'),
+          personName: optString(body, 'personName', 200),
           amountVnd: optIntMin0(body, 'amountVnd'),
-          note: optString(body, 'note'),
+          note: optString(body, 'note', 1000),
         });
       }
       if (method === 'DELETE') {
@@ -148,9 +148,9 @@ async function dispatch(req: Request, segments: string[]) {
     if (method === 'POST') {
       const body = await readJson(req);
       return sodam.upsertPerson(bookId, code, {
-        id: optString(body, 'id'),
-        displayName: reqString(body, 'displayName'),
-        note: optString(body, 'note'),
+        id: optString(body, 'id', 100),
+        displayName: reqString(body, 'displayName', 1, 200),
+        note: optString(body, 'note', 1000),
       });
     }
   }
@@ -165,8 +165,8 @@ async function dispatch(req: Request, segments: string[]) {
     if (method === 'POST') {
       const body = await readJson(req);
       return sodam.createRelation(bookId, code, {
-        fromPersonId: reqString(body, 'fromPersonId'),
-        toPersonId: reqString(body, 'toPersonId'),
+        fromPersonId: reqString(body, 'fromPersonId', 1, 100),
+        toPersonId: reqString(body, 'toPersonId', 1, 100),
         type: reqEnum<SodamRelationType>(body, 'type', RELATION_TYPES),
       });
     }
@@ -199,17 +199,17 @@ async function dispatch(req: Request, segments: string[]) {
   }
   if (segments.length === 3 && sub === 'import.csv' && method === 'POST') {
     const body = await readJson(req);
-    return sodam.importCsv(bookId, code, reqString(body, 'csv', 0));
+    return sodam.importCsv(bookId, code, reqString(body, 'csv', 0, 200_000));
   }
 
   // /books/:bookId/ai/*
   if (segments.length === 4 && sub === 'ai' && method === 'POST') {
     const body = third === 'photo' ? null : await readJson(req);
     if (third === 'parse') {
-      return ai.parseUtterance(bookId, code, reqString(body!, 'text'));
+      return ai.parseUtterance(bookId, code, reqString(body!, 'text', 1, 2000));
     }
     if (third === 'suggest-amount') {
-      return ai.suggestAmount(bookId, code, reqString(body!, 'personId'));
+      return ai.suggestAmount(bookId, code, reqString(body!, 'personId', 1, 100));
     }
     if (third === 'photo') {
       const form = await req.formData().catch(() => null);

@@ -38,7 +38,7 @@ export const FAQS: ReadonlyArray<{ question: string; answer: string }> = [
   {
     question: 'Mất mạng thì có ghi lễ tiếp được không?',
     answer:
-      'Được một phần, và app nói rõ phần nào: Sổ Đám cần có mạng để tải app và mở sổ (dữ liệu sổ nằm trên máy chủ, app không chạy hoàn toàn offline). Nhưng nếu app đang mở mà mạng chập chờn hoặc mất hẳn — rất hay gặp ở quê lúc đông khách — bạn vẫn ghi tiếp các khoản lễ mới: khoản ghi được lưu vào hàng chờ ngay trên máy và tự đồng bộ lên sổ khi có mạng trở lại. Hàng chờ chỉ áp dụng cho việc ghi khoản mới; các thao tác sửa, xóa lúc mất mạng sẽ không được phát lại.',
+      'Được một phần, và app nói rõ phần nào: Sổ Đám cần có mạng để tải app và mở sổ (dữ liệu sổ nằm trên máy chủ, app không chạy hoàn toàn offline). Đang mở app mà mất mạng thì vẫn ghi tiếp khoản lễ mới — app xếp hàng trên máy và tự đồng bộ khi có mạng lại và bạn quay về màn hình tổng quan của sổ. Mở sổ và xem dữ liệu vẫn cần kết nối. Hàng chờ chỉ áp dụng cho việc ghi khoản mới; các thao tác sửa, xóa lúc mất mạng sẽ không được phát lại.',
   },
   {
     question: 'Dữ liệu của tôi nằm ở đâu, có lấy ra được không?',

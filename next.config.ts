@@ -20,7 +20,20 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      {
+        // API chỉ trả JSON — khoá CSP về `default-src 'none'` (W4 LOW:
+        // response API trước đây có nosniff nhưng thiếu CSP). Rule này
+        // lặp lại đủ bộ header chung vì Next.js lấy giá trị của rule khớp
+        // cuối cùng cho mỗi key; trang HTML không nhận CSP này.
+        source: '/api/:path*',
+        headers: [
+          ...securityHeaders,
+          { key: 'Content-Security-Policy', value: "default-src 'none'; sandbox" },
+        ],
+      },
+    ];
   },
 };
 

@@ -7,7 +7,8 @@ import type {
   SodamReturnStatus,
 } from '@prisma/client';
 import { prisma } from './prisma';
-import { notFound } from './errors';
+import { badRequest, notFound } from './errors';
+import { INT4_MAX, INT4_MAX_MESSAGE } from './http';
 import { generateInviteCode, inviteCodesMatch, normalizeInviteCode } from './invite-code';
 import { sodamEventKindLabelVi } from './sodam-event-kinds';
 
@@ -24,6 +25,22 @@ import { sodamEventKindLabelVi } from './sodam-event-kinds';
  */
 
 type Tx = Prisma.TransactionClient;
+
+/**
+ * Last line of defense for amounts written to Int4 columns. Route handlers
+ * validate with `reqIntMin0`, but CSV import and offline sync call the
+ * service directly with `Number(...)` conversions — an out-of-range (or
+ * NaN) amount must become a friendly 400 here, never a raw DB error.
+ */
+function assertAmountVnd(amountVnd: number) {
+  if (
+    !Number.isFinite(amountVnd) ||
+    Math.round(amountVnd) < 0 ||
+    Math.round(amountVnd) > INT4_MAX
+  ) {
+    throw badRequest(INT4_MAX_MESSAGE);
+  }
+}
 
 export async function requireBookAccess(bookId: string, code: string) {
   const book = await prisma.sodamBook.findUnique({
@@ -250,6 +267,7 @@ export async function createEntry(
   await requireBookAccess(bookId, code);
   const event = await prisma.sodamEvent.findFirst({ where: { id: eventId, bookId } });
   if (!event) throw notFound('Event not found');
+  assertAmountVnd(input.amountVnd);
 
   if (input.clientMutationId) {
     const existing = await prisma.sodamEntry.findUnique({
@@ -292,6 +310,7 @@ export async function updateEntry(
     include: { event: true },
   });
   if (!entry) throw notFound('Entry not found');
+  if (input.amountVnd != null) assertAmountVnd(input.amountVnd);
   const updated = await prisma.$transaction(async (tx) => {
     let personId = entry.personId;
     if (input.personName != null) {
@@ -480,6 +499,7 @@ export async function markReturn(
     include: { person: true },
   });
   if (!item) throw notFound('Return item not found');
+  if (input.amountVnd != null) assertAmountVnd(input.amountVnd);
   const received = item.suggestedAmountVnd ?? 0;
   const paid =
     input.status === 'DONE' ? Math.max(0, Math.round(input.amountVnd ?? received)) : null;
@@ -550,7 +570,12 @@ export async function importCsv(bookId: string, code: string, csv: string) {
     if (cols.length < 4) continue;
     const personName = cols[2] ?? '';
     const amountVnd = Number(cols[3]);
-    if (!personName || !Number.isFinite(amountVnd)) continue;
+    // Skip rows whose amount cannot fit the Int4 column instead of
+    // aborting the whole import on the DB error (same skip semantics as
+    // the non-finite check that was already here).
+    if (!personName || !Number.isFinite(amountVnd) || amountVnd < 0 || amountVnd > INT4_MAX) {
+      continue;
+    }
     await createEntry(bookId, event.id, code, {
       personName,
       amountVnd,
