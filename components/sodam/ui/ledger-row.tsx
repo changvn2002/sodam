@@ -4,38 +4,40 @@ import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { PersonAvatar } from './avatar';
 
-/** Enterprise ledger row — timeline + DiceBear avatar + amount pill. */
+/**
+ * Một dòng sổ cái: avatar + tên + meta trái, số tiền Mono căn phải.
+ * Số tiền không bọc pill — cột số phải thẳng hàng để mắt quét dọc là cộng được.
+ */
 export function LedgerRow({
   name,
+  personId,
   amountLabel,
   meta,
   trailing,
   onClick,
 }: {
   name: string;
+  /** Id người (khi có) — truyền làm seed cho avatar để màu/hình ổn định. */
+  personId?: string;
   amountLabel: string;
   meta?: string;
   trailing?: ReactNode;
   onClick?: () => void;
 }) {
   const className = cn(
-    'group relative flex w-full flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-3 text-left transition-colors sm:flex-nowrap',
+    'flex min-h-[52px] w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors',
     onClick &&
-      'hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
+      'hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset',
   );
 
   const body = (
     <>
-      <span
-        className="absolute top-0 bottom-0 left-[1.65rem] hidden w-px bg-line sm:block group-first:top-1/2 group-last:bottom-1/2"
-        aria-hidden
-      />
-      <PersonAvatar name={name} size="md" className="relative z-[1]" />
-      <span className="min-w-0 flex-1 basis-[min(100%,12rem)]">
-        <span className="block truncate text-sm font-semibold text-ink">{name}</span>
+      <PersonAvatar name={name} seed={personId} size="md" className="relative z-[1]" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[15px] font-medium text-ink">{name}</span>
         {meta ? <span className="mt-0.5 block truncate text-xs text-muted">{meta}</span> : null}
       </span>
-      <span className="shrink-0 rounded-full border border-line bg-paper px-2.5 py-1 font-mono text-xs font-semibold tabular-nums text-ink">
+      <span className="shrink-0 font-mono text-[15px] font-semibold tabular-nums text-ink">
         {amountLabel}
       </span>
       {trailing}

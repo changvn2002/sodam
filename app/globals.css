@@ -5,55 +5,88 @@
 @source "../lib";
 @source "../app";
 
+/*
+ * Sổ Đám — "The Indigo Ledger" (Sổ Chàm). Token normative theo DESIGN.md:
+ * chàm là màu hệ thống duy nhất; sơn mài chỉ cho tiền đi / cảnh báo phá hủy;
+ * mọi số tiền dùng IBM Plex Mono. Bề mặt phẳng tuyệt đối, không nền chuyển màu trang trí.
+ */
 :root {
   color-scheme: light;
-  /* Self-hosted font stacks (Fontsource, imported in app/layout.tsx). */
-  --font-sans: 'Be Vietnam Pro', ui-sans-serif, system-ui, sans-serif;
-  --font-display: 'Outfit', 'Be Vietnam Pro', ui-sans-serif, system-ui, sans-serif;
-  --font-serif-vn: 'Playfair Display', 'Be Vietnam Pro', serif;
-  --ink: #101418;
-  --muted: #5b6570;
-  --line: #e1e4ea;
-  --paper: #f2f4f7;
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --indigo-950: #161a3d;
+  --indigo-900: #1e2456;
+  --indigo-800: #28306e;
+  --indigo-700: #323c85;
+  --indigo-600: #414da3;
+  --indigo-500: #5b67b8;
+  --indigo-100: #d8dcf2;
+  --indigo-50: #f0f1f8;
+
+  --paper: #f5f5f7;
   --card: #ffffff;
-  --accent: #0d9f88;
-  --jade-deep: #07332b;
+  --ink: #17192b;
+  --muted: #565b73;
+  --line: #dfe1ec;
+  --line-strong: #7e85ab;
   --lacquer: #b3352c;
   --gold: #c9a24b;
+  --gold-ink: #7a5a14;
   --gold-soft: #f3e5c3;
-  --shadow-card: 0 1px 2px rgba(16, 20, 24, 0.05), 0 8px 24px rgba(16, 20, 24, 0.06);
-  --shadow-lift: 0 2px 4px rgba(16, 20, 24, 0.06), 0 16px 40px rgba(16, 20, 24, 0.1);
+  --amber-ink: #7c4a03;
+  --amber-soft: #fbf0d9;
+  --green-ink: #1e7a46;
+  --cream: #f7f3e8;
+
+  --shadow-card: 0 1px 2px rgba(23, 25, 43, 0.05), 0 8px 24px rgba(23, 25, 43, 0.06);
+  --shadow-lift: 0 2px 4px rgba(23, 25, 43, 0.06), 0 16px 40px rgba(23, 25, 43, 0.1);
+
   --popover: var(--card);
   --popover-foreground: var(--ink);
   --border: var(--line);
   --muted-foreground: var(--muted);
+  --accent: var(--indigo-700);
   --accent-foreground: var(--card);
   --background: var(--paper);
   --foreground: var(--ink);
-  --primary: var(--ink);
+  --primary: var(--indigo-700);
   --primary-foreground: var(--card);
-  --secondary: color-mix(in srgb, var(--paper) 70%, var(--line));
+  --secondary: var(--indigo-50);
   --secondary-foreground: var(--ink);
-  --input: var(--line);
-  --ring: var(--accent);
+  --input: var(--line-strong);
+  --ring: var(--indigo-500);
   --radius: 0.75rem;
 }
 
 @theme inline {
+  --color-indigo-950: var(--indigo-950);
+  --color-indigo-900: var(--indigo-900);
+  --color-indigo-800: var(--indigo-800);
+  --color-indigo-700: var(--indigo-700);
+  --color-indigo-600: var(--indigo-600);
+  --color-indigo-500: var(--indigo-500);
+  --color-indigo-100: var(--indigo-100);
+  --color-indigo-50: var(--indigo-50);
+  --color-paper: var(--paper);
+  --color-card: var(--card);
   --color-ink: var(--ink);
   --color-muted: var(--muted);
   --color-line: var(--line);
-  --color-paper: var(--paper);
-  --color-card: var(--card);
-  --color-accent: var(--accent);
-  --color-jade-deep: var(--jade-deep);
+  --color-line-strong: var(--line-strong);
   --color-lacquer: var(--lacquer);
   --color-gold: var(--gold);
+  --color-gold-ink: var(--gold-ink);
   --color-gold-soft: var(--gold-soft);
+  --color-amber-ink: var(--amber-ink);
+  --color-amber-soft: var(--amber-soft);
+  --color-green-ink: var(--green-ink);
+  --color-cream: var(--cream);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-border: var(--border);
   --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -64,7 +97,7 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --font-sans: var(--font-sans);
-  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
   --radius-lg: var(--radius);
 }
 
@@ -75,51 +108,28 @@ body {
 }
 
 body {
-  font-family: var(--font-sans), 'Be Vietnam Pro', sans-serif;
+  font-family: var(--font-sans);
   min-height: 100vh;
   min-height: 100dvh;
   overflow-x: hidden;
 }
 
-.font-display {
-  font-family: var(--font-display), var(--font-sans), sans-serif;
-}
-
-/* Serif Việt cho tiêu đề mang tính gia đình/di sản (mẫu E2 Ngọc + sơn mài).
-   --font-serif-vn = Playfair Display (subset vietnamese, nạp ở layout.tsx).
-   KHÔNG đổi sang Georgia/Times hệ thống: thiếu dấu tiếng Việt tiền tố hợp,
-   chữ bị chồng dấu/lệch dấu trên Windows (lỗi user bắt 2026-10-09). */
-.font-serif-vn {
-  font-family: var(--font-serif-vn), 'Be Vietnam Pro', serif;
-}
-
-.site-canvas {
-  background:
-    radial-gradient(
-      1200px 480px at 8% -10%,
-      color-mix(in srgb, var(--accent) 12%, transparent),
-      transparent 60%
-    ),
-    radial-gradient(
-      900px 420px at 100% 0%,
-      color-mix(in srgb, var(--ink) 6%, transparent),
-      transparent 55%
-    ),
-    linear-gradient(180deg, color-mix(in srgb, var(--card) 55%, var(--paper)), var(--paper) 42%);
-}
-
-.site-grid {
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--line) 55%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--line) 55%, transparent) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: linear-gradient(180deg, color-mix(in srgb, black 55%, transparent), transparent 88%);
-}
-
-@keyframes rise-in {
+/* Motion inventory (DESIGN.md) — chỉ transform/opacity, đúng thời lượng đã khai. */
+@keyframes sheet-in {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -136,22 +146,22 @@ body {
   }
 }
 
-.animate-rise {
-  animation: rise-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+.animate-sheet {
+  animation: sheet-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-row {
+  animation: row-in 200ms ease-out both;
 }
 
 .animate-fade {
-  animation: fade-in 0.6s ease both;
+  animation: fade-in 160ms ease-out both;
 }
 
-.animate-rise-delay-1 {
-  animation-delay: 0.08s;
-}
-
-.animate-rise-delay-2 {
-  animation-delay: 0.16s;
-}
-
-.animate-rise-delay-3 {
-  animation-delay: 0.24s;
+@media (prefers-reduced-motion: reduce) {
+  .animate-sheet,
+  .animate-row,
+  .animate-fade {
+    animation: none;
+  }
 }

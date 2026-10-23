@@ -62,14 +62,32 @@ enum SodamRelationType {
 }
 
 model SodamBook {
-  id         String            @id @default(cuid())
-  name       String
-  inviteCode String            @unique
-  createdAt  DateTime          @default(now())
-  updatedAt  DateTime          @updatedAt
-  people     SodamPerson[]
-  events     SodamEvent[]
-  returns    SodamReturnItem[]
+  id             String            @id @default(cuid())
+  name           String
+  // SEC-08: legacy books carry the plaintext code here; v2 books leave it
+  // null and store only the SHA-256 hash below. Nullable so `db push` can
+  // add the hash column / drop the NOT NULL without touching existing rows.
+  inviteCode     String?           @unique
+  inviteCodeHash String?           @unique
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  people         SodamPerson[]
+  events         SodamEvent[]
+  returns        SodamReturnItem[]
+}
+
+// SEC-08 join throttling: failed-join counters keyed by scope ('ip' | 'code')
+// so brute-forcing the one credential of the no-login model hits a wall.
+model SodamJoinThrottle {
+  id          String   @id @default(cuid())
+  scope       String
+  key         String
+  count       Int      @default(0)
+  windowStart DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([scope, key])
+  @@index([updatedAt])
 }
 
 model SodamPerson {

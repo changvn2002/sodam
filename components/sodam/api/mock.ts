@@ -272,6 +272,14 @@ export function createMockSodamApi(): SodamApi {
       store.relations.push(rel);
       return rel;
     },
+    async deleteRelation(bookId, relationId) {
+      mustBook(bookId);
+      const personIds = new Set(store.people.filter((p) => p.bookId === bookId).map((p) => p.id));
+      const i = store.relations.findIndex(
+        (r) => r.id === relationId && personIds.has(r.fromPersonId),
+      );
+      if (i >= 0) store.relations.splice(i, 1);
+    },
     async tree(bookId) {
       return {
         people: await this.listPeople(bookId),

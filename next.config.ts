@@ -19,6 +19,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // SEC-01 (checklist grading vòng 1): tắt header X-Powered-By — bản build
+  // trước trả "X-Powered-By: Next.js" trong mọi response.
+  poweredByHeader: false,
   async headers() {
     return [
       { source: '/:path*', headers: securityHeaders },

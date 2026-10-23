@@ -11,7 +11,6 @@ import type {
   SodamEventRole,
   SodamParseResult,
   SodamPerson,
-  SodamPhotoCandidate,
   SodamRelation,
   SodamRelationType,
   SodamReturnItem,
@@ -20,48 +19,51 @@ import { cn } from '@/lib/utils';
 import { knownBookCodes, rememberBook } from './lib/book-store';
 import { useSodamOffline } from './lib/offline';
 import { EVENT_KIND_LABELS, EVENT_KIND_ORDER, kindLabel } from './lib/event-kinds';
+import { lexiconForKind, sourceLabel } from './lib/lexicon';
 import { formatLunarVi, solarToLunar } from './lib/lunar';
 import {
   Btn,
-  Camera,
-  EmptyState,
+  EmptyLedger,
   Field,
   Input,
-  Mic,
-  Panel,
-  QuickAction,
+  KpiBand,
+  SegmentedTabs,
+  Select,
+  Sheet,
   SodamShell,
-  StatTile,
+  StatusPill,
+  StickyActionBar,
+  formatInviteCode,
   type SodamNavId,
 } from './shell';
 import { BookAvatar, PersonAvatar } from './ui/avatar';
 import { LedgerRow } from './ui/ledger-row';
-import {
-  ArrowLeftRight,
-  Banknote,
-  BookMarked,
-  Gift,
-  HandCoins,
-  Users as UsersLucide,
-  ArrowRight,
-} from 'lucide-react';
+import { OutboxChip } from './ui/offline-ui';
+import InfoSections from '@/components/seo/InfoSections';
+import { Mic, Pencil, Plus, Search, Trash2, Undo2 } from 'lucide-react';
 
 type View =
   | { name: 'home' }
   | { name: 'dashboard'; bookId: string }
   | { name: 'event'; bookId: string; eventId: string }
-  | { name: 'voice'; bookId: string; eventId: string }
-  | { name: 'photo'; bookId: string; eventId: string }
   | { name: 'returns'; bookId: string }
   | { name: 'tree'; bookId: string }
   | { name: 'people'; bookId: string };
 
 const money = (n: number) => n.toLocaleString('vi-VN') + '₫';
 
-/** Mốc tiền mừng quen thuộc — bấm để điền nhanh vào ô số tiền, vẫn sửa tay được. */
+/** Chuỗi lỗi thô của fetch không bao giờ tới UI (F-W5-05) — ánh xạ sang tiếng Việt. */
+function friendlyError(e: unknown, fallback: string): string {
+  const msg = e instanceof Error ? e.message : '';
+  if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+    return 'Không kết nối được máy chủ — kiểm tra mạng rồi thử lại.';
+  }
+  return msg || fallback;
+}
+
+/** Mốc tiền mừng quen thuộc — chỉ điền khi người dùng chạm vào. */
 const QUICK_AMOUNTS = [100_000, 200_000, 300_000, 500_000, 1_000_000, 2_000_000, 5_000_000];
 
-/** Hiển thị số tiền có dấu chấm phân cách nghìn cho dễ đọc; state vẫn giữ chuỗi số thuần. */
 const formatAmountInput = (raw: string) => {
   const digits = raw.replace(/\D/g, '').slice(0, 12);
   return digits ? Number(digits).toLocaleString('vi-VN') : '';
@@ -75,7 +77,7 @@ function QuickAmounts({ onPick }: { onPick: (value: number) => void }) {
           key={v}
           type="button"
           onClick={() => onPick(v)}
-          className="inline-flex min-h-11 items-center rounded-full border border-line bg-paper px-3 text-[13px] font-medium tabular-nums text-ink transition-colors hover:border-ink/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="inline-flex min-h-11 items-center rounded-full border border-line-strong bg-card px-3 font-mono text-[13px] font-medium tabular-nums text-ink transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
           {money(v)}
         </button>
@@ -111,9 +113,6 @@ function eventDateLabels(occurredOn?: string): { solar: string; lunar: string } 
   }
 }
 
-const SOMBER_EVENT_KINDS = new Set(['MA', 'GIO']);
-
-/** Lưới chọn loại đám: đủ 13 loại, nhóm gọn, nút chạm ≥44px cho dễ bấm trên điện thoại. */
 function EventKindPicker({
   value,
   onChange,
@@ -121,46 +120,27 @@ function EventKindPicker({
   value: SodamEventKind;
   onChange: (kind: SodamEventKind) => void;
 }) {
-  const groups: Array<{ label: string; kinds: SodamEventKind[] }> = [
-    {
-      label: 'Đám vui',
-      kinds: EVENT_KIND_ORDER.filter((k) => !SOMBER_EVENT_KINDS.has(k) && k !== 'KHAC'),
-    },
-    { label: 'Đám tưởng nhớ', kinds: EVENT_KIND_ORDER.filter((k) => SOMBER_EVENT_KINDS.has(k)) },
-    { label: 'Khác', kinds: EVENT_KIND_ORDER.filter((k) => k === 'KHAC') },
-  ];
   return (
-    <div className="space-y-3">
-      {groups
-        .filter((g) => g.kinds.length > 0)
-        .map((group) => (
-          <div key={group.label}>
-            <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-muted uppercase">
-              {group.label}
-            </p>
-            <div className="grid grid-cols-3 gap-1.5">
-              {group.kinds.map((k) => {
-                const active = value === k;
-                return (
-                  <button
-                    key={k}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => onChange(k)}
-                    className={cn(
-                      'inline-flex min-h-11 items-center justify-center rounded-xl border px-2 text-center text-[13px] leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                      active
-                        ? 'border-lacquer bg-lacquer font-semibold text-card'
-                        : 'border-line bg-paper text-ink hover:border-ink/25',
-                    )}
-                  >
-                    {EVENT_KIND_LABELS[k] ?? kindLabel(k)}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+    <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Loại đám">
+      {EVENT_KIND_ORDER.map((k) => {
+        const active = value === k;
+        return (
+          <button
+            key={k}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(k)}
+            className={cn(
+              'inline-flex min-h-11 items-center justify-center rounded-[10px] border px-2 text-center text-[13px] leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
+              active
+                ? 'border-indigo-700 bg-indigo-700 font-semibold text-white'
+                : 'border-line-strong bg-card text-ink hover:bg-indigo-50',
+            )}
+          >
+            {EVENT_KIND_LABELS[k] ?? kindLabel(k)}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -170,7 +150,7 @@ function navFromView(view: View): SodamNavId {
   if (view.name === 'returns') return 'returns';
   if (view.name === 'people') return 'people';
   if (view.name === 'tree') return 'tree';
-  if (view.name === 'event' || view.name === 'voice' || view.name === 'photo') return 'event';
+  if (view.name === 'event') return 'event';
   return 'overview';
 }
 
@@ -180,21 +160,19 @@ export function SodamApp() {
   const [view, setView] = useState<View>({ name: 'home' });
   const [books, setBooks] = useState<SodamBook[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [aiBlocked, setAiBlocked] = useState(false);
-  const { online, enqueue, flush } = useSodamOffline(api);
+  const { online, enqueue, flush, pendingCount, flushFailed, bindBook, refreshPending } =
+    useSodamOffline(api);
   const joinFromLinkTried = useRef(false);
 
-  // No accounts: "my books" are resolved from the invite codes this device
-  // has stored (created or joined here). See lib/book-store.
   const refreshBooks = useCallback(async () => {
     try {
       const list = await api.listBooks(mode === 'mock' ? [] : knownBookCodes());
       setBooks(list);
-      // Keep the local registry in sync with what the server still knows.
       for (const b of list) rememberBook(b.id, b.inviteCode);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Lỗi tải sổ');
+      // Mất mạng: banner offline đã nói rõ; không chồng thêm banner lỗi thô.
+      if (navigator.onLine) setError(friendlyError(e, 'Lỗi tải sổ'));
     }
   }, [api, mode]);
 
@@ -202,8 +180,7 @@ export function SodamApp() {
     void refreshBooks();
   }, [refreshBooks]);
 
-  // Share link (?code=XXXX): opening it joins the book and goes straight in —
-  // that is the whole "invite" flow now that there are no accounts.
+  // Share link (?code=XXXX): mở link là vào thẳng sổ.
   useEffect(() => {
     if (joinFromLinkTried.current) return;
     joinFromLinkTried.current = true;
@@ -225,13 +202,17 @@ export function SodamApp() {
     })();
   }, [api, refreshBooks]);
 
-  useEffect(() => {
-    if (online && view.name === 'dashboard') void flush(view.bookId);
-  }, [online, view, flush]);
-
-  const bookId = view.name === 'home' ? null : 'bookId' in view ? view.bookId : null;
+  const bookId = view.name === 'home' ? null : view.bookId;
   const activeBook = books.find((b) => b.id === bookId) ?? null;
   const showBookNav = view.name !== 'home' && Boolean(bookId);
+
+  useEffect(() => {
+    if (bookId) bindBook(bookId);
+  }, [bookId, bindBook]);
+
+  useEffect(() => {
+    if (online && bookId) void flush(bookId);
+  }, [online, bookId, flush]);
 
   const onNav = (id: SodamNavId) => {
     if (!bookId || id === 'home') {
@@ -244,14 +225,20 @@ export function SodamApp() {
     if (id === 'tree') setView({ name: 'tree', bookId });
   };
 
+  const outboxChip =
+    bookId && pendingCount > 0 ? (
+      <OutboxChip
+        count={pendingCount}
+        failed={flushFailed}
+        onRetry={() => void flush(bookId).then(() => refreshPending())}
+      />
+    ) : null;
+
   return (
     <SodamShell
-      title="Sổ Đám"
-      subtitle={view.name === 'home' ? 'Nhận lễ · trả lễ · với ai' : undefined}
-      bookName={activeBook?.name}
-      inviteCode={activeBook?.inviteCode}
+      title={view.name === 'home' ? 'Sổ Đám' : (activeBook?.name ?? 'Sổ Đám')}
+      inviteCode={showBookNav ? activeBook?.inviteCode : undefined}
       online={online}
-      aiBlocked={aiBlocked}
       error={error}
       activeNav={navFromView(view)}
       onNav={onNav}
@@ -260,21 +247,31 @@ export function SodamApp() {
     >
       {view.name === 'home' ? (
         <HomeView
+          api={api}
           books={books}
+          online={online}
           onCreate={async (name) => {
-            const book = await api.createBook(name);
-            await refreshBooks();
-            setView({ name: 'dashboard', bookId: book.id });
+            try {
+              const book = await api.createBook(name);
+              await refreshBooks();
+              setView({ name: 'dashboard', bookId: book.id });
+              return null;
+            } catch (e) {
+              if (!navigator.onLine) {
+                return 'Chưa có mạng — chưa tạo được sổ. Tên sổ đã được giữ lại, bấm Thử lại khi có mạng.';
+              }
+              return friendlyError(e, 'Chưa tạo được sổ — thử lại sau ít phút.');
+            }
           }}
           onJoin={async (code) => {
-            const trimmed = code.trim();
-            if (trimmed.length < 3) {
-              setError('Nhập mã sổ ít nhất 3 ký tự (mã trên sổ của người nhà).');
-              return;
+            try {
+              const book = await api.joinBook(code.trim());
+              await refreshBooks();
+              setView({ name: 'dashboard', bookId: book.id });
+              return null;
+            } catch {
+              return 'Không tìm thấy sổ với mã này — kiểm tra lại mã hoặc mở link chia sẻ là vào thẳng.';
             }
-            const book = await api.joinBook(trimmed);
-            await refreshBooks();
-            setView({ name: 'dashboard', bookId: book.id });
           }}
           onOpen={(id) => setView({ name: 'dashboard', bookId: id })}
         />
@@ -284,9 +281,10 @@ export function SodamApp() {
         <DashboardView
           api={api}
           bookId={view.bookId}
+          online={online}
+          enqueue={enqueue}
+          outboxChip={outboxChip}
           onOpenEvent={(eventId) => setView({ name: 'event', bookId: view.bookId, eventId })}
-          onVoice={(eventId) => setView({ name: 'voice', bookId: view.bookId, eventId })}
-          onPhoto={(eventId) => setView({ name: 'photo', bookId: view.bookId, eventId })}
           onReturns={() => setView({ name: 'returns', bookId: view.bookId })}
           onError={setError}
         />
@@ -297,200 +295,206 @@ export function SodamApp() {
           api={api}
           bookId={view.bookId}
           eventId={view.eventId}
-          onBack={() => setView({ name: 'dashboard', bookId: view.bookId })}
-          onVoice={() => setView({ name: 'voice', bookId: view.bookId, eventId: view.eventId })}
-          onPhoto={() => setView({ name: 'photo', bookId: view.bookId, eventId: view.eventId })}
-          enqueue={enqueue}
           online={online}
-          onError={setError}
-        />
-      ) : null}
-
-      {view.name === 'voice' ? (
-        <VoiceView
-          api={api}
-          bookId={view.bookId}
-          eventId={view.eventId}
-          onBack={() => setView({ name: 'event', bookId: view.bookId, eventId: view.eventId })}
-          onAiBlocked={() => setAiBlocked(true)}
-          onError={setError}
-        />
-      ) : null}
-
-      {view.name === 'photo' ? (
-        <PhotoView
-          api={api}
-          bookId={view.bookId}
-          eventId={view.eventId}
-          onBack={() => setView({ name: 'event', bookId: view.bookId, eventId: view.eventId })}
-          onAiBlocked={() => setAiBlocked(true)}
+          enqueue={enqueue}
+          outboxChip={outboxChip}
+          onBack={() => setView({ name: 'dashboard', bookId: view.bookId })}
           onError={setError}
         />
       ) : null}
 
       {view.name === 'returns' ? (
-        <ReturnsView api={api} bookId={view.bookId} onError={setError} />
+        <ReturnsView
+          api={api}
+          bookId={view.bookId}
+          bookName={activeBook?.name}
+          onGoDashboard={() => setView({ name: 'dashboard', bookId: view.bookId })}
+          onError={setError}
+        />
       ) : null}
 
-      {view.name === 'tree' ? <TreeView api={api} bookId={view.bookId} onError={setError} /> : null}
+      {view.name === 'tree' ? (
+        <TreeView api={api} bookId={view.bookId} bookName={activeBook?.name} onError={setError} />
+      ) : null}
 
       {view.name === 'people' ? (
-        <PeopleView api={api} bookId={view.bookId} onError={setError} />
+        <PeopleView api={api} bookId={view.bookId} bookName={activeBook?.name} onError={setError} />
       ) : null}
     </SodamShell>
   );
 }
 
 function HomeView({
+  api,
   books,
+  online,
   onCreate,
   onJoin,
   onOpen,
 }: {
+  api: SodamApi;
   books: SodamBook[];
-  onCreate: (name: string) => Promise<void>;
-  onJoin: (code: string) => Promise<void>;
+  online: boolean;
+  onCreate: (name: string) => Promise<string | null>;
+  onJoin: (code: string) => Promise<string | null>;
   onOpen: (id: string) => void;
 }) {
-  const [name, setName] = useState('Sổ nhà');
+  const [tab, setTab] = useState('create');
+  const [name, setName] = useState('');
   const [code, setCode] = useState('');
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [totals, setTotals] = useState<Record<string, number>>({});
+
+  // Tổng đã nhận của từng sổ (để hàng sổ đủ thông tin) — lỗi thì bỏ qua, hàng vẫn mở được.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const next: Record<string, number> = {};
+      await Promise.allSettled(
+        books.map(async (b) => {
+          const dash = await api.dashboard(b.id);
+          next[b.id] = dash.totals.receivedGrossVnd ?? dash.totals.receivedVnd;
+        }),
+      );
+      if (!cancelled) setTotals(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [api, books]);
 
   return (
-    <div className="space-y-6">
-      {/* Dải chào gọn (bản E2): logo riêng + lời chào serif + chip tính năng.
-          Không dùng hero lớn: người quay lại cần thấy sổ của mình ngay. */}
-      <div className="rounded-3xl border border-line/70 bg-card px-5 py-6 shadow-[var(--shadow-card)] sm:px-7">
-        <div className="flex items-start gap-4">
+    <div>
+      <div className="mx-auto max-w-2xl">
+        <div className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/products/brand/sodam-logo.svg"
-            alt="Logo Sổ Đám"
-            width={56}
-            height={56}
-            className="size-14 shrink-0 rounded-2xl shadow-[var(--shadow-card)] ring-1 ring-black/10"
+            alt=""
+            width={40}
+            height={40}
+            className="size-10 shrink-0 rounded-[10px]"
           />
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold tracking-[0.16em] text-lacquer uppercase">
-              Sổ Đám · Changto
-            </p>
-            <h1 className="font-serif-vn mt-1.5 text-[28px] leading-tight font-semibold tracking-tight text-ink sm:text-[34px]">
-              Sổ đám của nhà bạn
-            </h1>
-            <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-muted">
-              Ghi nhận lễ bằng miệng hoặc ảnh, theo dõi trả lễ, tìm lại ai đã đi với mình — theo
-              đúng nếp nhà mình.
-            </p>
-          </div>
+          <h1 className="text-[28px] leading-[34px] font-bold tracking-tight">Sổ Đám</h1>
         </div>
-        <div className="mt-5 flex flex-wrap gap-2">
-          <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-line bg-paper px-3 text-xs text-muted">
-            <Mic className="size-3.5 text-accent" /> Voice + TTS
-          </span>
-          <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-line bg-paper px-3 text-xs text-muted">
-            <Camera className="size-3.5 text-accent" /> Ảnh sổ
-          </span>
-          <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-line bg-paper px-3 text-xs text-muted">
-            <UsersLucide className="size-3.5 text-accent" /> Đồng sổ
-          </span>
-        </div>
-      </div>
+        <p className="mt-1.5 text-[15px] text-muted">Sổ ghi tiền mừng của nhà mình.</p>
 
-      {/* Sổ của bạn lên trước: người quay lại mở sổ trong 1 chạm. */}
-      <section aria-label="Sổ của bạn">
-        <div className="mb-3 flex items-end justify-between gap-3 px-1">
-          <h2 className="font-serif-vn text-xl font-semibold tracking-tight text-ink">
-            Sổ của bạn
-          </h2>
-          <p className="text-xs text-muted">Bấm để mở — không cần nhập mã</p>
+        <div className="mt-5">
+          <SegmentedTabs
+            ariaLabel="Tạo sổ hoặc vào bằng mã"
+            value={tab}
+            onChange={setTab}
+            options={[
+              { id: 'create', label: 'Tạo sổ' },
+              { id: 'join', label: 'Vào bằng mã' },
+            ]}
+          />
         </div>
-        {books.length === 0 ? (
-          <Panel>
-            <EmptyState
-              title="Chưa có sổ nào"
-              body="Tạo sổ đầu tiên ở mục bên dưới để bắt đầu ghi nhận lễ và theo dõi trả lễ."
-            />
-          </Panel>
-        ) : (
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {books.map((b) => (
-              <li key={b.id}>
-                <button
-                  type="button"
-                  onClick={() => onOpen(b.id)}
-                  className="group flex w-full items-center gap-3.5 rounded-3xl border border-line/70 bg-card p-4 text-left shadow-[var(--shadow-card)] transition-all hover:-translate-y-0.5 hover:border-jade-deep/30 hover:shadow-[var(--shadow-lift)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-                >
-                  <BookAvatar name={b.name} size="lg" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[15px] font-semibold text-ink">
-                      {b.name}
-                    </span>
-                    <span className="mt-0.5 block font-mono text-[11px] tracking-wide text-muted">
-                      Mã sổ {b.inviteCode}
-                    </span>
-                  </span>
-                  <ArrowRight className="size-5 shrink-0 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-jade-deep" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
 
-      {/* Hai hành động tạo/vào sổ: thẻ ngang nhau, quét mắt 1 giây là hiểu. */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Panel title="Tạo sổ mới" description="Đặt tên sổ theo nhà hoặc dịp, mở ra ghi ngay.">
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <div className="flex-1">
-              <Field label="Tên sổ mới">
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="VD: Sổ cưới 2026"
-                />
-              </Field>
-            </div>
-            <Btn
-              className="w-full shrink-0 self-end sm:w-auto"
-              onClick={() => void onCreate(name.trim() || 'Sổ nhà')}
-            >
-              <BookMarked className="size-4" />
-              Tạo sổ &amp; mở
+        {tab === 'create' ? (
+          <form
+            className="mt-4 space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (busy) return;
+              setBusy(true);
+              void onCreate(name.trim())
+                .then((err) => setCreateError(err))
+                .finally(() => setBusy(false));
+            }}
+          >
+            <Field label="Tên sổ" error={createError}>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="VD: Sổ cưới 2026, Sổ giỗ bà"
+                autoComplete="off"
+              />
+            </Field>
+            <Btn type="submit" disabled={busy} className="min-h-12 w-full">
+              {createError && !online ? 'Thử lại' : 'Tạo sổ & mở'}
             </Btn>
-          </div>
-        </Panel>
-
-        <Panel
-          title="Vào sổ bằng mã"
-          description="Người nhà đã tạo sổ? Nhập mã sổ để ghi chung — hoặc mở link chia sẻ là vào thẳng."
-        >
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <div className="flex-1">
-              <Field label="Mã sổ">
-                <Input
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder="VD: A1B2C3D4E5F6"
-                  className="uppercase"
-                  autoComplete="off"
-                />
-              </Field>
-            </div>
-            <Btn
-              variant="secondary"
-              className="w-full shrink-0 self-end sm:w-auto"
-              onClick={() => {
-                if (code.trim().length < 3) return;
-                void onJoin(code.trim());
-              }}
-            >
-              <Gift className="size-4" />
+          </form>
+        ) : (
+          <form
+            className="mt-4 space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (busy || code.trim().length < 3) return;
+              setBusy(true);
+              void onJoin(code)
+                .then((err) => setJoinError(err))
+                .finally(() => setBusy(false));
+            }}
+          >
+            <Field label="Mã mời" error={joinError}>
+              <Input
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="VD: A1B2 C3D4 E5F6 G7H8"
+                className="font-mono tracking-wide uppercase"
+                autoComplete="off"
+              />
+            </Field>
+            <p className="text-sm text-muted">Mở link chia sẻ là vào thẳng, không cần nhập mã.</p>
+            <Btn type="submit" disabled={busy} className="min-h-12 w-full">
               Vào sổ
             </Btn>
-          </div>
-        </Panel>
+          </form>
+        )}
+
+        <section aria-label="Sổ của bạn" className="mt-8">
+          <h2 className="text-[17px] font-semibold">
+            Sổ của bạn{' '}
+            <span className="font-normal text-muted">
+              ({books.length} {books.length === 1 ? 'sổ' : 'sổ'})
+            </span>
+          </h2>
+          {books.length === 0 ? (
+            <div className="mt-2 rounded-xl border border-line bg-card">
+              <EmptyLedger
+                title="Chưa có sổ nào"
+                body="Tạo sổ đầu tiên ở trên để bắt đầu ghi lễ cho nhà mình."
+              />
+            </div>
+          ) : (
+            <ul className="mt-2 divide-y divide-line rounded-xl border border-line bg-card">
+              {books.map((b) => (
+                <li key={b.id}>
+                  <button
+                    type="button"
+                    onClick={() => onOpen(b.id)}
+                    className="flex min-h-14 w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
+                  >
+                    <BookAvatar name={b.name} size="md" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[15px] font-medium text-ink">
+                        {b.name}
+                      </span>
+                      <span className="mt-0.5 block font-mono text-xs tabular-nums text-muted">
+                        {formatInviteCode(b.inviteCode)}
+                      </span>
+                    </span>
+                    {totals[b.id] != null ? (
+                      <span className="shrink-0 font-mono text-[15px] font-semibold tabular-nums">
+                        {money(totals[b.id]!)}
+                      </span>
+                    ) : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <SeasonStrip />
       </div>
 
-      <SeasonCard firstBookId={books[0]?.id} onOpen={onOpen} />
+      <div className="mt-10">
+        <InfoSections />
+      </div>
     </div>
   );
 }
@@ -507,122 +511,59 @@ function nextTet(from: Date): { date: Date; days: number } | null {
   return null;
 }
 
-/**
- * Thẻ mùa lễ dưới chân trang (mẫu F3 user chốt 2026-10-09):
- * ngọc đậm, phong bì sơn mài vẽ tay, đếm ngày tới Tết theo âm lịch thật.
- */
-function SeasonCard({
-  firstBookId,
-  onOpen,
-}: {
-  firstBookId?: string;
-  onOpen: (id: string) => void;
-}) {
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const title =
-    month >= 9 ? 'Mùa cưới tháng 9–12' : month <= 2 ? 'Mùa Tết đoàn viên' : 'Mùa lễ đang tới';
-  const tet = nextTet(now);
-  const fmt = (d: Date) => `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
-
+/** Dải mùa lễ 1 hàng: đếm ngày tới Tết theo âm lịch thật. */
+function SeasonStrip() {
+  const tet = nextTet(new Date());
+  if (!tet) return null;
+  const fmt = `${tet.date.getDate()}/${tet.date.getMonth() + 1}`;
   return (
-    <section
-      aria-label="Mùa lễ đang tới"
-      className="relative overflow-hidden rounded-3xl bg-jade-deep p-5 text-[#FAF6EF] shadow-[var(--shadow-lift)] sm:p-6"
-    >
-      <svg
-        className="pointer-events-none absolute -top-2 right-0 h-full w-28 opacity-80 sm:w-52 sm:opacity-90"
-        viewBox="0 0 150 120"
-        aria-hidden
-      >
-        <g transform="rotate(12 60 50)">
-          <rect x="34" y="18" width="52" height="66" rx="5" fill="#B3352C" />
-          <path d="M36 22 L60 44 L84 22" stroke="#F2D98C" strokeWidth="2.5" fill="none" />
-          <circle cx="60" cy="62" r="9" fill="none" stroke="#E9C767" strokeWidth="2.5" />
-          <rect x="56.5" y="58.5" width="7" height="7" fill="#07332B" />
-        </g>
-        <g transform="rotate(-9 102 66)">
-          <rect x="80" y="36" width="44" height="58" rx="5" fill="#8C2820" />
-          <path d="M82 40 L102 57 L122 40" stroke="#F2D98C" strokeWidth="2.2" fill="none" />
-          <circle cx="102" cy="76" r="7" fill="none" stroke="#E9C767" strokeWidth="2.2" />
-          <rect x="99" y="73" width="6" height="6" fill="#07332B" />
-        </g>
-        <circle cx="128" cy="18" r="3.5" fill="#E9C767" />
-        <circle cx="18" cy="10" r="2.5" fill="#E9C767" opacity=".7" />
-        <circle cx="140" cy="52" r="2.5" fill="#E9C767" opacity=".6" />
-      </svg>
-
-      <div className="relative">
-        <p className="text-[10px] font-bold tracking-[0.2em] text-gold uppercase">
-          Mùa lễ đang tới
-        </p>
-        <h3 className="font-serif-vn mt-1.5 text-[21px] font-semibold text-[#FFFDF8]">{title}</h3>
-        <p className="mt-1.5 max-w-[15.5rem] text-[13px] leading-relaxed text-[#FAF6EF]/75 sm:max-w-sm">
-          {firstBookId
-            ? 'Mở sổ để xem các đám sắp tới và những khoản cần trả lễ trong mùa này.'
-            : 'Tạo cuốn sổ đầu tiên để nhà mình không bỏ sót một đám nào trong mùa lễ.'}
-          {tet ? (
-            <>
-              {' '}
-              Còn <b className="text-gold">{tet.days} ngày</b> tới Tết Nguyên đán ({fmt(tet.date)}).
-            </>
-          ) : null}
-        </p>
-        {firstBookId ? (
-          <div className="mt-4 flex flex-wrap gap-2.5">
-            <button
-              type="button"
-              onClick={() => onOpen(firstBookId)}
-              className="inline-flex min-h-11 items-center rounded-xl bg-lacquer px-4 text-[13px] font-semibold text-white transition-colors hover:bg-lacquer/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-            >
-              Xem lịch đám
-            </button>
-            <button
-              type="button"
-              onClick={() => onOpen(firstBookId)}
-              className="inline-flex min-h-11 items-center rounded-xl border border-gold/50 px-4 text-[13px] font-semibold text-gold transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-            >
-              Nhắc trả lễ
-            </button>
-          </div>
-        ) : null}
-      </div>
-    </section>
+    <p className="mt-6 flex min-h-10 items-center gap-2 rounded-xl border border-line bg-card px-3.5 text-sm text-muted">
+      <span aria-hidden className="inline-block size-2.5 shrink-0 rounded-sm bg-lacquer" />
+      Còn <span className="font-mono font-semibold text-ink">{tet.days} ngày</span> tới Tết Nguyên
+      đán ({fmt})
+    </p>
   );
 }
 
 function DashboardView({
   api,
   bookId,
+  online,
+  enqueue,
+  outboxChip,
   onOpenEvent,
-  onVoice,
-  onPhoto,
   onReturns,
   onError,
 }: {
   api: SodamApi;
   bookId: string;
+  online: boolean;
+  enqueue: (bookId: string, type: string, payload: Record<string, unknown>) => void;
+  outboxChip: React.ReactNode;
   onOpenEvent: (id: string) => void;
-  onVoice: (id: string) => void;
-  onPhoto: (id: string) => void;
   onReturns: () => void;
   onError: (m: string | null) => void;
 }) {
   const [dash, setDash] = useState<SodamDashboard | null>(null);
-  const [newTitle, setNewTitle] = useState('');
-  const [newKind, setNewKind] = useState<SodamEventKind>('CUOI');
-  const [newRole, setNewRole] = useState<SodamEventRole>('HOSTED');
-  const [newDate, setNewDate] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  });
-  const [creating, setCreating] = useState(false);
+  const [events, setEvents] = useState<SodamEvent[]>([]);
+  const [pending, setPending] = useState<SodamReturnItem[]>([]);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [entryEvent, setEntryEvent] = useState<SodamEvent | null>(null);
+
   const reload = useCallback(async () => {
     try {
-      setDash(await api.dashboard(bookId));
+      const [d, evs, rets] = await Promise.all([
+        api.dashboard(bookId),
+        api.listEvents(bookId),
+        api.listReturns(bookId, 'OPEN'),
+      ]);
+      setDash(d);
+      setEvents(evs);
+      setPending(rets);
       onError(null);
     } catch (e) {
-      onError(e instanceof Error ? e.message : 'Lỗi dashboard');
+      onError(friendlyError(e, 'Lỗi tải sổ'));
     }
   }, [api, bookId, onError]);
 
@@ -634,646 +575,388 @@ function DashboardView({
     return <p className="text-sm text-muted">Đang tải sổ…</p>;
   }
 
-  const ensureHosted = async () => {
-    if (dash.openEvent?.role === 'HOSTED') return dash.openEvent.id;
-    const ev = await api.createEvent(bookId, {
-      title: 'Đám nhận lễ',
-      kind: 'CUOI',
-      role: 'HOSTED',
-    });
-    return ev.id;
-  };
-
-  const createNewEvent = async () => {
-    setCreating(true);
-    try {
-      const ev = await api.createEvent(bookId, {
-        title: newTitle.trim() || kindLabel(newKind),
-        kind: newKind,
-        role: newRole,
-        occurredOn: newDate || undefined,
-      });
-      onOpenEvent(ev.id);
-    } catch (e) {
-      onError(e instanceof Error ? e.message : 'Tạo đám lỗi');
-    } finally {
-      setCreating(false);
-    }
-  };
+  const t = dash.totals;
+  const ghiKhoanTarget = dash.openEvent ?? events[0] ?? null;
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile
-          label="Còn giữ (sau trả lễ)"
-          value={money(dash.totals.receivedVnd)}
-          icon={Banknote}
-          featured
-        />
-        <StatTile
-          label="Khách đã mừng"
-          value={money(dash.totals.receivedGrossVnd ?? dash.totals.receivedVnd)}
-          icon={Gift}
-        />
-        <StatTile label="Đã trả / đi" value={money(dash.totals.givenVnd)} icon={HandCoins} />
-        <StatTile
-          label="Cần trả lễ"
-          value={
-            dash.totals.pendingReturnVnd != null && dash.totals.pendingReturnVnd > 0
-              ? money(dash.totals.pendingReturnVnd)
-              : String(dash.openReturnCount)
-          }
-          icon={ArrowLeftRight}
-        />
-      </div>
+    <div className="pb-24">
+      <h1 className="sr-only">{dash.book.name}</h1>
+      <KpiBand
+        items={[
+          { label: 'Còn giữ', value: money(t.receivedVnd) },
+          { label: 'Đã nhận', value: money(t.receivedGrossVnd ?? t.receivedVnd) },
+          { label: 'Đã trả / đi', value: money(t.givenVnd) },
+          {
+            label: 'Cần trả lễ',
+            value: money(t.pendingReturnVnd ?? 0),
+            sub: `${dash.openReturnCount} khách`,
+          },
+        ]}
+      />
+      <p className="mt-2.5 text-sm text-muted">
+        Đã nhận{' '}
+        <span className="font-mono font-medium text-ink">{money(t.receivedGrossVnd ?? 0)}</span>
+        {' − đã trả '}
+        <span className="font-mono font-medium text-ink">{money(t.settledVnd ?? 0)}</span>
+        {' = còn giữ '}
+        <span className="font-mono font-medium text-ink">{money(t.receivedVnd)}</span>
+        {(t.overGivenVnd ?? 0) > 0 ? (
+          <>
+            {' · đi nhiều hơn '}
+            <span className="font-mono font-medium text-lacquer">{money(t.overGivenVnd!)}</span>
+          </>
+        ) : null}
+      </p>
 
-      {(dash.totals.overGivenVnd ?? 0) > 0 || (dash.totals.settledVnd ?? 0) > 0 ? (
-        <div className="rounded-2xl border border-line bg-card px-4 py-3 text-sm">
-          <p className="font-medium text-ink">Công thức sổ</p>
-          <p className="mt-1 text-muted">
-            Tổng mừng {money(dash.totals.receivedGrossVnd ?? 0)} − đã trừ trả lễ{' '}
-            {money(dash.totals.settledVnd ?? 0)} = còn giữ {money(dash.totals.receivedVnd)}
-            {(dash.totals.overGivenVnd ?? 0) > 0 ? (
-              <>
-                {' '}
-                ·{' '}
-                <span className="font-semibold text-accent">
-                  đi nhiều hơn {money(dash.totals.overGivenVnd!)}
-                </span>
-              </>
-            ) : null}
-          </p>
-        </div>
-      ) : null}
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <QuickAction
-          icon={Mic}
-          label="Nhận lễ — Voice"
-          hint="Ghi khách + tiền khi tổ chức đám"
-          tone="accent"
-          onClick={() => void ensureHosted().then(onVoice)}
-        />
-        <QuickAction
-          icon={Camera}
-          label="Nhận lễ — Ảnh"
-          hint="Chụp sổ giấy, duyệt từng dòng"
-          onClick={() => void ensureHosted().then(onPhoto)}
-        />
-        <QuickAction
-          icon={UsersLucide}
-          label="Danh sách trả lễ"
-          hint={
-            dash.openReturnCount > 0
-              ? `${dash.openReturnCount} khách · ${money(dash.totals.pendingReturnVnd ?? 0)}`
-              : 'Chưa có khoản mở'
-          }
-          onClick={onReturns}
-        />
-      </div>
-
-      <Panel
-        title="Tạo đám mới"
-        description="Chọn loại đám theo nếp Việt, ghi ngày dương — app tự hiện ngày âm bên dưới."
-      >
-        <div className="space-y-4">
-          <Field label="Tên đám">
-            <Input
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              placeholder={`VD: ${kindLabel(newKind)} nhà mình`}
-            />
-          </Field>
-          <div>
-            <p className="mb-1.5 text-xs font-medium text-muted">Loại đám</p>
-            <EventKindPicker value={newKind} onChange={setNewKind} />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <p className="mb-1.5 text-xs font-medium text-muted">Vai trò</p>
-              <div
-                className="grid grid-cols-2 gap-1.5"
-                role="group"
-                aria-label="Vai trò của nhà mình"
-              >
-                {(
-                  [
-                    { id: 'HOSTED', label: 'Nhận lễ' },
-                    { id: 'ATTENDED', label: 'Đi đám' },
-                  ] as Array<{ id: SodamEventRole; label: string }>
-                ).map((r) => (
+      <div className="mt-6 flex items-center justify-between gap-2">
+        <h2 className="text-[17px] font-semibold">Đám</h2>
+        <div className="flex items-center gap-1.5">
+          <div className="relative">
+            <Btn
+              variant="ghost"
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-expanded={menuOpen}
+              aria-label="Thêm tuỳ chọn cho sổ"
+            >
+              ⋯
+            </Btn>
+            {menuOpen ? (
+              <div className="absolute right-0 z-20 mt-1 w-48 rounded-xl border border-line bg-card p-1.5 shadow-[var(--shadow-lift)]">
+                <button
+                  type="button"
+                  className="flex min-h-11 w-full items-center rounded-lg px-3 text-left text-sm hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    void (async () => {
+                      try {
+                        const csv = await api.exportCsv(bookId);
+                        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'sodam-export.csv';
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      } catch (e) {
+                        onError(friendlyError(e, 'Xuất CSV lỗi'));
+                      }
+                    })();
+                  }}
+                >
+                  Xuất CSV
+                </button>
+                <label className="flex min-h-11 w-full cursor-pointer items-center rounded-lg px-3 text-sm hover:bg-indigo-50">
+                  Nhập CSV
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      setMenuOpen(false);
+                      if (!file) return;
+                      void file.text().then(async (csv) => {
+                        try {
+                          await api.importCsv(bookId, csv);
+                          await reload();
+                        } catch (err) {
+                          onError(friendlyError(err, 'Nhập CSV lỗi'));
+                        }
+                      });
+                    }}
+                  />
+                </label>
+                {dash.openEvent ? (
                   <button
-                    key={r.id}
                     type="button"
-                    aria-pressed={newRole === r.id}
-                    onClick={() => setNewRole(r.id)}
-                    className={cn(
-                      'inline-flex min-h-11 items-center justify-center rounded-xl border px-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                      newRole === r.id
-                        ? 'border-lacquer bg-lacquer font-semibold text-card'
-                        : 'border-line bg-paper text-ink hover:border-ink/25',
-                    )}
+                    className="flex min-h-11 w-full items-center rounded-lg px-3 text-left text-sm hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      void api
+                        .closeEvent(bookId, dash.openEvent!.id)
+                        .then(reload)
+                        .catch((err: Error) => onError(friendlyError(err, 'Đóng đám lỗi')));
+                    }}
                   >
-                    {r.label}
+                    Đóng đám đang ghi
                   </button>
-                ))}
+                ) : null}
               </div>
-            </div>
-            <Field label="Ngày (dương lịch)">
-              <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
-            </Field>
+            ) : null}
           </div>
-          {newKind === 'GIO' ? (
-            <p className="rounded-xl bg-[#E8F7F4] px-3 py-2 text-xs font-medium text-accent">
-              Đám giỗ tính theo ngày âm — app sẽ hiện ngày âm của đám để nhà mình đối chiếu hằng
-              năm.
-            </p>
-          ) : null}
-          <Btn
-            className="w-full sm:w-auto"
-            disabled={creating}
-            onClick={() => void createNewEvent()}
-          >
-            Tạo đám & mở sổ
+          <Btn variant="secondary" onClick={() => setCreateOpen(true)}>
+            <Plus className="size-4" /> Tạo đám
           </Btn>
         </div>
-      </Panel>
-
-      {dash.openEvent ? (
-        <Panel
-          title="Đám đang ghi"
-          description={dash.openEvent.title}
-          action={
-            <Btn variant="secondary" onClick={() => onOpenEvent(dash.openEvent!.id)}>
-              Mở sổ khách
-            </Btn>
-          }
-        >
-          <p className="text-sm text-muted">
-            {kindLabel(dash.openEvent.kind)} ·{' '}
-            {dash.openEvent.role === 'HOSTED' ? 'Nhận lễ' : 'Đi đám'} · tổng mừng{' '}
-            {money(dash.openEvent.totalAmountVnd ?? 0)} · {dash.openEvent.entryCount ?? 0} khách
-          </p>
-          {(() => {
-            const dates = eventDateLabels(dash.openEvent.occurredOn);
-            return dates ? (
-              <p className="mt-1 text-sm text-muted">
-                Ngày {dates.solar}
-                {dates.lunar ? (
-                  <span className="block text-xs text-muted/80">{dates.lunar}</span>
-                ) : null}
-              </p>
-            ) : null;
-          })()}
-        </Panel>
-      ) : null}
-
-      <Panel title="Excel / CSV" description="Xuất hoặc nhập danh sách nhanh.">
-        <ExcelBar api={api} bookId={bookId} onError={onError} />
-      </Panel>
-
-      <Panel title="Đám gần đây">
-        {dash.recentEvents.length === 0 ? (
-          <EmptyState title="Chưa có đám" body="Tạo đám nhận lễ để ghi khách và tiền." />
-        ) : (
-          <ul className="overflow-hidden rounded-2xl border border-line">
-            {dash.recentEvents.map((e) => {
-              const dates = eventDateLabels(e.occurredOn);
-              return (
-                <li key={e.id} className="border-b border-line last:border-b-0">
-                  <button
-                    type="button"
-                    className="flex min-h-14 w-full items-center gap-3 px-3.5 py-2 text-left transition-colors hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
-                    onClick={() => onOpenEvent(e.id)}
-                  >
-                    <BookAvatar name={e.title} size="md" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium text-ink">{e.title}</span>
-                      <span className="mt-0.5 block text-xs text-muted">
-                        {kindLabel(e.kind)} · {e.role === 'HOSTED' ? 'Nhận lễ' : 'Đi đám'}
-                        {e.totalAmountVnd != null ? ` · ${money(e.totalAmountVnd)}` : ''}
-                      </span>
-                      {dates ? (
-                        <span className="mt-0.5 block text-[11px] text-muted/80">
-                          {dates.solar}
-                          {dates.lunar ? ` · ${dates.lunar}` : ''}
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="shrink-0 rounded-full border border-line bg-paper px-2.5 py-1 text-[11px] font-medium text-muted">
-                      Mở
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Panel>
-    </div>
-  );
-}
-
-function ExcelBar({
-  api,
-  bookId,
-  onError,
-}: {
-  api: SodamApi;
-  bookId: string;
-  onError: (m: string | null) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-2 sm:flex-row">
-      <Btn
-        variant="secondary"
-        className="w-full sm:w-auto"
-        onClick={() =>
-          void (async () => {
-            try {
-              const csv = await api.exportCsv(bookId);
-              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = 'sodam-export.csv';
-              a.click();
-              URL.revokeObjectURL(url);
-            } catch (e) {
-              onError(e instanceof Error ? e.message : 'Export lỗi');
-            }
-          })()
-        }
-      >
-        Xuất CSV
-      </Btn>
-      <label className="inline-flex min-h-11 w-full cursor-pointer items-center justify-center rounded-xl border border-line bg-card px-4 text-sm font-medium transition-colors hover:bg-paper sm:w-auto">
-        Nhập CSV
-        <input
-          type="file"
-          accept=".csv,text/csv"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            void file.text().then(async (csv) => {
-              try {
-                await api.importCsv(bookId, csv);
-                onError(null);
-              } catch (err) {
-                onError(err instanceof Error ? err.message : 'Import lỗi');
-              }
-            });
-          }}
-        />
-      </label>
-    </div>
-  );
-}
-
-function EventView({
-  api,
-  bookId,
-  eventId,
-  onBack,
-  onVoice,
-  onPhoto,
-  enqueue,
-  online,
-  onError,
-}: {
-  api: SodamApi;
-  bookId: string;
-  eventId: string;
-  onBack: () => void;
-  onVoice: () => void;
-  onPhoto: () => void;
-  enqueue: (bookId: string, type: string, payload: Record<string, unknown>) => void;
-  online: boolean;
-  onError: (m: string | null) => void;
-}) {
-  const [event, setEvent] = useState<(SodamEvent & { entries: SodamEntry[] }) | null>(null);
-  const [name, setName] = useState('');
-  const [amount, setAmount] = useState('500000');
-
-  const reload = useCallback(async () => {
-    try {
-      setEvent(await api.getEvent(bookId, eventId));
-    } catch (e) {
-      onError(e instanceof Error ? e.message : 'Lỗi đám');
-    }
-  }, [api, bookId, eventId, onError]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  if (!event) return <p className="text-sm text-muted">Đang tải đám…</p>;
-
-  const isHosted = event.role === 'HOSTED';
-  const gross = event.totalAmountVnd ?? 0;
-  const settled = event.settledVnd ?? 0;
-  const net = event.netTotalVnd ?? Math.max(0, gross - settled);
-  const over = event.overGivenVnd ?? 0;
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Btn variant="ghost" onClick={onBack}>
-          ← Tổng quan
-        </Btn>
-        <div className="min-w-0">
-          <h2 className="font-serif-vn truncate text-[22px] font-semibold tracking-tight">
-            {event.title}
-          </h2>
-          <p className="text-sm text-muted">
-            {kindLabel(event.kind)} · {isHosted ? 'Nhận lễ' : 'Đi đám'} · {event.entryCount ?? 0}{' '}
-            khách
-          </p>
-          {(() => {
-            const dates = eventDateLabels(event.occurredOn);
-            if (!dates) return null;
-            return (
-              <>
-                <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
-                  <span>Ngày {dates.solar} (dương lịch)</span>
-                  {dates.lunar ? (
-                    <span className="inline-flex items-center rounded-full bg-gold-soft px-2.5 py-0.5 text-xs font-semibold text-[#7A5A14]">
-                      {dates.lunar}
-                    </span>
-                  ) : null}
-                </p>
-                {event.kind === 'GIO' && dates.lunar ? (
-                  <p className="mt-2 inline-block rounded-xl bg-gold-soft px-3 py-2 text-xs font-medium text-[#7A5A14]">
-                    Đám giỗ tính theo ngày âm ({dates.lunar}) — mỗi năm nhà mình đối chiếu đúng ngày
-                    âm này.
-                  </p>
-                ) : null}
-              </>
-            );
-          })()}
-        </div>
       </div>
 
-      {isHosted ? (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatTile label="Tổng mừng" value={money(gross)} icon={Gift} />
-          <StatTile label="Còn giữ" value={money(net)} icon={Banknote} />
-          <StatTile label="Đã trừ trả lễ" value={money(settled)} icon={ArrowLeftRight} />
-          <StatTile label="Đi nhiều hơn" value={money(over)} icon={HandCoins} />
+      {events.length === 0 ? (
+        <div className="mt-3 rounded-xl border border-line bg-card">
+          <EmptyLedger
+            title="Chưa có đám nào"
+            body="Tạo đám đầu tiên để bắt đầu ghi khoản cho nhà mình."
+            action={
+              <Btn onClick={() => setCreateOpen(true)}>
+                <Plus className="size-4" /> Tạo đám
+              </Btn>
+            }
+          />
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:max-w-xs">
-          <StatTile label="Tổng đã đưa" value={money(gross)} icon={HandCoins} />
-        </div>
+        <ul className="mt-3 max-h-[46dvh] divide-y divide-line overflow-y-auto rounded-xl border border-line bg-card">
+          {events.map((e) => {
+            const dates = eventDateLabels(e.occurredOn);
+            const lex = lexiconForKind(e.kind);
+            return (
+              <li key={e.id}>
+                <button
+                  type="button"
+                  onClick={() => onOpenEvent(e.id)}
+                  className="flex min-h-14 w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
+                >
+                  <BookAvatar name={e.title} size="md" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[15px] font-medium text-ink">
+                      {e.title}
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs text-muted">
+                      {kindLabel(e.kind)} · {e.role === 'HOSTED' ? 'Nhận lễ' : 'Đi đám'}
+                      {dates ? ` · ${dates.solar}` : ''} · {e.entryCount ?? 0}{' '}
+                      {lex.personLabel.toLowerCase()}
+                    </span>
+                  </span>
+                  <span className="shrink-0 font-mono text-[15px] font-semibold tabular-nums">
+                    {money(e.totalAmountVnd ?? 0)}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Btn onClick={onVoice} className="w-full">
-          <Mic className="size-4" /> Ghi bằng miệng
-        </Btn>
-        <Btn variant="secondary" onClick={onPhoto} className="w-full">
-          <Camera className="size-4" /> Chụp ảnh sổ
-        </Btn>
-      </div>
-
-      <Panel title="Thêm khách" description="Tên + số tiền khách mừng.">
-        <div className="grid gap-3 sm:grid-cols-[1fr_8rem_auto]">
-          <Field label="Tên">
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Họ tên" />
-          </Field>
-          <Field label="Số tiền">
-            <Input
-              inputMode="numeric"
-              value={formatAmountInput(amount)}
-              onChange={(e) => setAmount(e.target.value.replace(/\D/g, ''))}
-            />
-          </Field>
-          <div className="flex items-end">
-            <Btn
-              className="w-full"
-              onClick={() =>
-                void (async () => {
-                  const amountVnd = Number(amount.replace(/\D/g, '')) || 0;
-                  if (!name.trim()) return;
-                  try {
-                    if (!online) {
-                      enqueue(bookId, 'createEntry', {
-                        eventId,
-                        personName: name.trim(),
-                        amountVnd,
-                        source: 'MANUAL',
-                      });
-                    } else {
-                      await api.createEntry(bookId, eventId, {
-                        personName: name.trim(),
-                        amountVnd,
-                        source: 'MANUAL',
-                      });
-                    }
-                    setName('');
-                    await reload();
-                  } catch (e) {
-                    onError(e instanceof Error ? e.message : 'Ghi lỗi');
-                  }
-                })()
-              }
-            >
-              Thêm
+      {pending.length > 0 ? (
+        <section aria-label="Chờ trả lễ" className="mt-6">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-[17px] font-semibold">Chờ trả lễ</h2>
+            <Btn variant="ghost" onClick={onReturns}>
+              Xem hết
             </Btn>
           </div>
-        </div>
-        <div className="mt-3">
-          <p className="mb-1.5 text-xs font-medium text-muted">Chọn nhanh số tiền</p>
-          <QuickAmounts onPick={(v) => setAmount(String(v))} />
-        </div>
-      </Panel>
-
-      <Panel
-        title="Sổ khách"
-        description={
-          isHosted
-            ? 'Mỗi hàng: tiền khách mừng + ô trả lễ. Tổng trừ đúng số họ đã mừng; nếu đi nhiều hơn sẽ ghi rõ.'
-            : 'Danh sách tiền đã đưa khi đi đám.'
-        }
-      >
-        {event.entries.length === 0 ? (
-          <EmptyState
-            title="Chưa có khách"
-            body="Ghi miệng, chụp ảnh sổ giấy, hoặc thêm tay bên trên."
-          />
-        ) : (
-          <ul className="max-h-[60vh] space-y-2 overflow-y-auto">
-            {event.entries.map((e) => (
-              <li key={e.id}>
-                {isHosted ? (
-                  <GuestReturnRow
-                    entry={e}
-                    onMark={(returnId, amountVnd) =>
-                      void api
-                        .markReturn(bookId, returnId, { status: 'DONE', amountVnd })
-                        .then(reload)
-                        .catch((err: Error) => onError(err.message))
-                    }
-                  />
-                ) : (
-                  <div className="overflow-hidden rounded-2xl border border-line">
-                    <LedgerRow
-                      name={e.personName}
-                      amountLabel={money(e.amountVnd)}
-                      meta={`${e.source} · ${new Date(e.createdAt).toLocaleString('vi-VN')}`}
-                    />
-                  </div>
-                )}
+          <ul className="mt-2 divide-y divide-line rounded-xl border border-line bg-card">
+            {pending.slice(0, 5).map((r) => (
+              <li key={r.id}>
+                <LedgerRow
+                  name={r.personName ?? r.personId}
+                  personId={r.personId}
+                  amountLabel={money(r.receivedAmountVnd ?? r.suggestedAmountVnd ?? 0)}
+                  meta={r.fromEventTitle ?? undefined}
+                  trailing={<StatusPill status="OPEN" />}
+                />
               </li>
             ))}
           </ul>
-        )}
-      </Panel>
+        </section>
+      ) : null}
+
+      <StickyActionBar totalLabel="Còn giữ" totalValue={money(t.receivedVnd)} chip={outboxChip}>
+        <Btn onClick={() => (ghiKhoanTarget ? setEntryEvent(ghiKhoanTarget) : setCreateOpen(true))}>
+          <Plus className="size-4" /> Ghi khoản
+        </Btn>
+      </StickyActionBar>
+
+      <CreateEventSheet
+        open={createOpen}
+        api={api}
+        bookId={bookId}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(ev, ghiNgay) => {
+          setCreateOpen(false);
+          void reload();
+          if (ghiNgay) setEntryEvent(ev);
+          else onOpenEvent(ev.id);
+        }}
+        onError={onError}
+      />
+      {entryEvent ? (
+        <EntrySheet
+          api={api}
+          bookId={bookId}
+          event={entryEvent}
+          online={online}
+          enqueue={enqueue}
+          onClose={() => setEntryEvent(null)}
+          onSaved={() => void reload()}
+        />
+      ) : null}
     </div>
   );
 }
 
-function GuestReturnRow({
-  entry,
-  onMark,
-}: {
-  entry: SodamEntry;
-  onMark: (returnId: string, amountVnd: number) => void;
-}) {
-  const received = entry.amountVnd;
-  const ret = entry.returnItem;
-  const defaultPay = ret?.receivedAmountVnd ?? received;
-  const [pay, setPay] = useState(String(defaultPay));
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    setPay(String(ret?.receivedAmountVnd ?? received));
-  }, [ret?.receivedAmountVnd, received, entry.id]);
-
-  const payNum = Number(pay.replace(/\D/g, '')) || 0;
-  const delta = payNum - received;
-
-  if (ret?.status === 'DONE') {
-    const paid = ret.returnedAmountVnd ?? received;
-    const over = ret.overGivenVnd ?? Math.max(0, paid - (ret.receivedAmountVnd ?? received));
-    return (
-      <div className="rounded-2xl border border-line bg-card p-3.5">
-        <div className="flex items-center gap-3">
-          <PersonAvatar name={entry.personName} size="md" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-ink">{entry.personName}</p>
-            <p className="mt-0.5 text-xs text-muted">
-              Mừng {money(ret.receivedAmountVnd ?? received)} · đã trả {money(paid)}
-            </p>
-          </div>
-          <span className="shrink-0 rounded-full border border-line bg-paper px-2.5 py-1 text-[11px] font-semibold text-muted">
-            Đã trả lễ
-          </span>
-        </div>
-        {over > 0 ? (
-          <p className="mt-2 rounded-xl bg-[#E8F7F4] px-3 py-2 text-xs font-medium text-accent">
-            Đi nhiều hơn {money(over)} so với số khách đã mừng — tổng sổ chỉ trừ{' '}
-            {money(ret.receivedAmountVnd ?? received)}.
-          </p>
-        ) : (
-          <p className="mt-2 text-xs text-muted">
-            Trả đúng số khách đã mừng · đã trừ khỏi tổng còn giữ.
-          </p>
-        )}
-      </div>
-    );
-  }
-
-  if (ret?.status === 'SKIPPED') {
-    return (
-      <div className="flex items-center gap-3 rounded-2xl border border-dashed border-line bg-paper/80 p-3.5">
-        <PersonAvatar name={entry.personName} size="md" />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-ink">{entry.personName}</p>
-          <p className="text-xs text-muted">Mừng {money(received)} · đã bỏ qua trả lễ</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-2xl border border-line bg-card p-3.5">
-      <div className="flex items-center gap-3">
-        <PersonAvatar name={entry.personName} size="md" />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-ink">{entry.personName}</p>
-          <p className="mt-0.5 text-xs text-muted">
-            Khách mừng <span className="font-mono font-semibold text-ink">{money(received)}</span>
-            <span className="mx-1.5 text-line">·</span>
-            {entry.source}
-          </p>
-        </div>
-      </div>
-      {ret?.id ? (
-        <>
-          <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
-            <Field label="Trả lễ (số mình đi)">
-              <Input
-                inputMode="numeric"
-                value={formatAmountInput(pay)}
-                onChange={(e) => setPay(e.target.value.replace(/\D/g, ''))}
-                aria-label={`Trả lễ cho ${entry.personName}`}
-              />
-            </Field>
-            <Btn
-              disabled={busy || payNum <= 0 || !ret?.id}
-              onClick={() => {
-                if (!ret?.id) return;
-                setBusy(true);
-                Promise.resolve(onMark(ret.id, payNum)).finally(() => setBusy(false));
-              }}
-            >
-              Xác nhận trả
-            </Btn>
-            {delta > 0 ? (
-              <p className="text-xs font-medium text-accent sm:col-span-2">
-                Sẽ ghi đi nhiều hơn {money(delta)} — tổng còn giữ chỉ trừ {money(received)}.
-              </p>
-            ) : delta < 0 ? (
-              <p className="text-xs text-muted sm:col-span-2">
-                Trả ít hơn số mừng {money(-delta)} — vẫn trừ đủ {money(received)} khỏi tổng còn giữ.
-              </p>
-            ) : (
-              <p className="text-xs text-muted sm:col-span-2">Trả đúng số khách đã mừng.</p>
-            )}
-          </div>
-          <div className="mt-2">
-            <QuickAmounts onPick={(v) => setPay(String(v))} />
-          </div>
-        </>
-      ) : (
-        <p className="mt-2 text-xs text-muted">Đang đồng bộ nghĩa vụ trả lễ…</p>
-      )}
-    </div>
-  );
-}
-
-function VoiceView({
+function CreateEventSheet({
+  open,
   api,
   bookId,
-  eventId,
-  onBack,
-  onAiBlocked,
+  onClose,
+  onCreated,
   onError,
+}: {
+  open: boolean;
+  api: SodamApi;
+  bookId: string;
+  onClose: () => void;
+  onCreated: (event: SodamEvent, ghiNgay: boolean) => void;
+  onError: (m: string | null) => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [kind, setKind] = useState<SodamEventKind>('CUOI');
+  const [role, setRole] = useState<SodamEventRole>('HOSTED');
+  const [date, setDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+  const [busy, setBusy] = useState(false);
+  const dates = eventDateLabels(date);
+
+  const create = async (ghiNgay: boolean) => {
+    setBusy(true);
+    try {
+      const ev = await api.createEvent(bookId, {
+        title: title.trim() || kindLabel(kind),
+        kind,
+        role,
+        occurredOn: date || undefined,
+      });
+      setTitle('');
+      onCreated(ev, ghiNgay);
+    } catch (e) {
+      onError(friendlyError(e, 'Tạo đám lỗi'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Sheet open={open} title="Tạo đám" onClose={onClose}>
+      <div className="space-y-4">
+        <Field label="Tên đám">
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder={`VD: ${kindLabel(kind)} nhà mình`}
+          />
+        </Field>
+        <div>
+          <p className="mb-1.5 text-sm font-medium">Loại đám</p>
+          <EventKindPicker value={kind} onChange={setKind} />
+        </div>
+        <div>
+          <p className="mb-1.5 text-sm font-medium">Vai trò</p>
+          <SegmentedTabs
+            ariaLabel="Vai trò của nhà mình"
+            value={role}
+            onChange={(id) => setRole(id as SodamEventRole)}
+            options={[
+              { id: 'HOSTED', label: 'Nhận lễ' },
+              { id: 'ATTENDED', label: 'Đi đám' },
+            ]}
+          />
+        </div>
+        <Field label="Ngày (dương lịch)">
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </Field>
+        {dates?.lunar ? (
+          <p className="-mt-2 text-sm text-muted">
+            Ngày âm: <span className="font-medium text-gold-ink">{dates.lunar}</span>
+          </p>
+        ) : null}
+        <p className="text-sm text-muted">Ghi ngày dương — app tự hiện ngày âm.</p>
+        {kind === 'GIO' ? (
+          <p className="rounded-[10px] bg-gold-soft px-3 py-2 text-sm font-medium text-gold-ink">
+            Giỗ tính theo ngày âm — app hiện ngày âm để đối chiếu hằng năm.
+          </p>
+        ) : null}
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Btn className="flex-1" disabled={busy} onClick={() => void create(true)}>
+            Tạo đám & ghi ngay
+          </Btn>
+          <Btn
+            variant="secondary"
+            className="flex-1"
+            disabled={busy}
+            onClick={() => void create(false)}
+          >
+            Tạo đám
+          </Btn>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
+/**
+ * Sheet ghi khoản — 2 mode [Gõ tay | Giọng nói]. Tiền để trống mặc định;
+ * trống khi lưu = lỗi tại trường + focus. Có dòng xem lại bắt buộc trước
+ * khi lưu. Offline: khoản vào hàng chờ trên máy (outbox thật).
+ */
+function EntrySheet({
+  api,
+  bookId,
+  event,
+  online,
+  enqueue,
+  onClose,
+  onSaved,
 }: {
   api: SodamApi;
   bookId: string;
-  eventId: string;
-  onBack: () => void;
-  onAiBlocked: () => void;
-  onError: (m: string | null) => void;
+  event: SodamEvent;
+  online: boolean;
+  enqueue: (bookId: string, type: string, payload: Record<string, unknown>) => void;
+  onClose: () => void;
+  onSaved: () => void;
 }) {
+  const lex = lexiconForKind(event.kind);
+  const [mode, setMode] = useState('manual');
+  const [name, setName] = useState('');
+  const [amount, setAmount] = useState('');
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [amountError, setAmountError] = useState<string | null>(null);
+  const [people, setPeople] = useState<SodamPerson[]>([]);
+  const [queuedNote, setQueuedNote] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const amountRef = useRef<HTMLInputElement>(null);
+
+  // Giọng nói
   const [listening, setListening] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [pending, setPending] = useState<SodamParseResult | null>(null);
+  const [voiceNote, setVoiceNote] = useState<string | null>(null);
   const recogRef = useRef<{ start: () => void; stop: () => void } | null>(null);
-  const wantListen = useRef(false);
+
+  useEffect(() => {
+    void api
+      .listPeople(bookId)
+      .then(setPeople)
+      .catch(() => setPeople([]));
+  }, [api, bookId]);
+
+  useEffect(
+    () => () => {
+      try {
+        recogRef.current?.stop();
+      } catch {
+        // Đã dừng rồi — bỏ qua.
+      }
+    },
+    [],
+  );
+
+  const amountNum = Number(amount.replace(/\D/g, '')) || 0;
+  const suggestions = useMemo(() => {
+    const q = name.trim().toLowerCase();
+    return people.filter((p) => !q || p.displayName.toLowerCase().includes(q)).slice(0, 6);
+  }, [people, name]);
 
   const speak = (text: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
@@ -1286,17 +969,26 @@ function VoiceView({
   const handleUtterance = async (text: string) => {
     setTranscript(text);
     try {
-      const parsed = await api.parseUtterance(bookId, text);
-      setPending(parsed);
+      const parsed: SodamParseResult = await api.parseUtterance(bookId, text);
+      if (parsed.name) setName(parsed.name);
+      if (parsed.amountVnd != null) setAmount(String(parsed.amountVnd));
+      setVoiceNote(parsed.speakBack);
       speak(parsed.speakBack);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'AI lỗi';
-      if (/blocked|403|Forbidden|khóa/i.test(msg)) onAiBlocked();
-      onError(msg);
+      setVoiceNote(friendlyError(e, 'Chưa nghe rõ — đọc lại hoặc chuyển sang Gõ tay.'));
     }
   };
 
-  const start = () => {
+  const toggleListen = () => {
+    if (listening) {
+      try {
+        recogRef.current?.stop();
+      } catch {
+        // bỏ qua
+      }
+      setListening(false);
+      return;
+    }
     const w = window as unknown as {
       SpeechRecognition?: new () => SpeechRec;
       webkitSpeechRecognition?: new () => SpeechRec;
@@ -1317,13 +1009,13 @@ function VoiceView({
     };
     const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SR) {
-      onError('Trình duyệt không hỗ trợ Web Speech — nhập tay ở màn đám.');
+      setVoiceNote('Trình duyệt này không hỗ trợ ghi bằng giọng nói — dùng Gõ tay vẫn được.');
       return;
     }
     const recog = new SR();
     recog.lang = 'vi-VN';
-    recog.continuous = true;
-    recog.interimResults = true;
+    recog.continuous = false;
+    recog.interimResults = false;
     recog.onresult = (ev) => {
       let finalText = '';
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
@@ -1332,163 +1024,568 @@ function VoiceView({
       }
       if (finalText.trim()) void handleUtterance(finalText.trim());
     };
-    recog.onend = () => {
-      if (wantListen.current) {
-        try {
-          recog.start();
-        } catch {
-          setListening(false);
-        }
-      } else setListening(false);
-    };
+    recog.onend = () => setListening(false);
     recogRef.current = recog;
-    wantListen.current = true;
     recog.start();
     setListening(true);
   };
 
-  const stop = () => {
-    wantListen.current = false;
-    recogRef.current?.stop();
-    setListening(false);
+  const save = async () => {
+    let ok = true;
+    if (!name.trim()) {
+      setNameError(`Chưa nhập tên — gõ tên hoặc chọn một người bên dưới.`);
+      ok = false;
+    } else setNameError(null);
+    if (amountNum <= 0) {
+      setAmountError('Chưa nhập số tiền — chạm một mức bên dưới hoặc gõ số tiền.');
+      ok = false;
+    } else setAmountError(null);
+    if (!ok) {
+      if (!name.trim()) nameRef.current?.focus();
+      else amountRef.current?.focus();
+      return;
+    }
+    const source = mode === 'voice' ? 'VOICE' : 'MANUAL';
+    setBusy(true);
+    try {
+      if (!online) {
+        enqueue(bookId, 'createEntry', {
+          eventId: event.id,
+          personName: name.trim(),
+          amountVnd: amountNum,
+          source,
+        });
+        setQueuedNote(true);
+        onSaved();
+        return;
+      }
+      await api.createEntry(bookId, event.id, {
+        personName: name.trim(),
+        amountVnd: amountNum,
+        source,
+        rawText: source === 'VOICE' ? transcript || undefined : undefined,
+      });
+      onSaved();
+      onClose();
+    } catch (e) {
+      setAmountError(friendlyError(e, 'Chưa lưu được khoản — thử lại.'));
+    } finally {
+      setBusy(false);
+    }
   };
 
-  useEffect(() => () => stop(), []);
-
   return (
-    <div className="mx-auto max-w-lg space-y-4">
-      <Btn variant="ghost" onClick={onBack}>
-        ← Quay lại sổ
-      </Btn>
-      <Panel
-        title="Ghi miệng"
-        description="Nghe liên tục trong màn này. Mỗi câu AI đọc lại — chỉ lưu khi bấm Đúng."
-      >
-        <Btn
-          className="w-full"
-          variant={listening ? 'danger' : 'primary'}
-          onClick={() => (listening ? stop() : start())}
-        >
-          <Mic className="size-4" />
-          {listening ? 'Dừng nghe' : 'Bắt đầu nghe liên tục'}
-        </Btn>
-        <p className="mt-4 rounded-xl border border-line bg-paper px-3 py-3 text-sm">
-          <span className="text-xs font-medium text-muted">Vừa nghe</span>
-          <span className="mt-1 block text-ink">{transcript || '…'}</span>
-        </p>
-        {pending ? (
-          <div className="mt-4 space-y-3 rounded-xl border border-line p-4">
-            <p className="text-sm leading-relaxed">{pending.speakBack}</p>
-            <div className="grid grid-cols-2 gap-2">
+    <Sheet open title={`Ghi khoản — ${event.title}`} onClose={onClose}>
+      {queuedNote ? (
+        <div className="space-y-4">
+          <p role="status" className="rounded-[10px] bg-indigo-50 px-3 py-3 text-sm font-medium">
+            Đã lưu vào hàng chờ trên máy này — sẽ tự gửi khi có mạng.
+          </p>
+          <Btn className="w-full" onClick={onClose}>
+            Xong
+          </Btn>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <SegmentedTabs
+            ariaLabel="Cách ghi khoản"
+            value={mode}
+            onChange={setMode}
+            options={[
+              { id: 'manual', label: 'Gõ tay' },
+              { id: 'voice', label: 'Giọng nói' },
+            ]}
+          />
+
+          {mode === 'voice' ? (
+            <div className="space-y-3">
               <Btn
-                onClick={() =>
-                  void (async () => {
-                    if (!pending.name || pending.amountVnd == null) return;
-                    await api.createEntry(bookId, eventId, {
-                      personName: pending.name,
-                      amountVnd: pending.amountVnd,
-                      source: 'VOICE',
-                      rawText: pending.rawText,
-                    });
-                    setPending(null);
-                  })()
-                }
+                className="min-h-12 w-full"
+                variant={listening ? 'danger' : 'primary'}
+                onClick={toggleListen}
               >
-                Đúng — lưu
+                <Mic className="size-4" />
+                {listening ? 'Dừng nghe' : 'Bấm để nói'}
               </Btn>
-              <Btn variant="secondary" onClick={() => setPending(null)}>
-                Sai — nói lại
-              </Btn>
+              <p className="text-sm text-muted">
+                Ghi miệng trước, sửa sau. Tiền chỉ lưu khi bạn xác nhận Lưu.
+              </p>
+              {transcript ? (
+                <p className="rounded-[10px] border border-line bg-paper px-3 py-2.5 text-sm">
+                  <span className="text-xs font-medium text-muted">Vừa nghe: </span>
+                  {transcript}
+                </p>
+              ) : null}
+              {voiceNote ? (
+                <p role="status" className="text-sm font-medium text-indigo-700">
+                  {voiceNote}
+                </p>
+              ) : null}
             </div>
+          ) : null}
+
+          <Field label={lex.nameFieldLabel} error={nameError}>
+            <Input
+              ref={nameRef}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Họ tên"
+              autoComplete="off"
+            />
+          </Field>
+          {suggestions.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Người đã có trong sổ">
+              {suggestions.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setName(p.displayName)}
+                  className="inline-flex min-h-11 items-center rounded-full border border-line-strong bg-card px-3 text-sm transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                >
+                  {p.displayName}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <Field label={`Số ${lex.entryNoun}`} error={amountError}>
+            <Input
+              ref={amountRef}
+              inputMode="numeric"
+              value={formatAmountInput(amount)}
+              onChange={(e) => setAmount(e.target.value.replace(/\D/g, ''))}
+              placeholder="0₫"
+            />
+          </Field>
+          <QuickAmounts onPick={(v) => setAmount(String(v))} />
+
+          <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
+            <p className="min-w-0 text-sm text-muted" aria-live="polite">
+              {name.trim() && amountNum > 0 ? (
+                <>
+                  Sẽ ghi: <span className="font-medium text-ink">{name.trim()}</span> —{' '}
+                  <span className="font-mono font-semibold text-ink">{money(amountNum)}</span>
+                </>
+              ) : (
+                'Sẽ ghi: …'
+              )}
+            </p>
+            <Btn disabled={busy} onClick={() => void save()} className="shrink-0">
+              Lưu khoản
+            </Btn>
           </div>
-        ) : null}
-      </Panel>
-    </div>
+          {!online ? (
+            <p className="text-sm text-muted">
+              Đang offline — khoản sẽ lưu vào hàng chờ trên máy này và tự gửi khi có mạng.
+            </p>
+          ) : null}
+        </div>
+      )}
+    </Sheet>
   );
 }
 
-function PhotoView({
+function EventView({
   api,
   bookId,
   eventId,
+  online,
+  enqueue,
+  outboxChip,
   onBack,
-  onAiBlocked,
   onError,
 }: {
   api: SodamApi;
   bookId: string;
   eventId: string;
+  online: boolean;
+  enqueue: (bookId: string, type: string, payload: Record<string, unknown>) => void;
+  outboxChip: React.ReactNode;
   onBack: () => void;
-  onAiBlocked: () => void;
   onError: (m: string | null) => void;
 }) {
-  const [rows, setRows] = useState<SodamPhotoCandidate[]>([]);
+  const [event, setEvent] = useState<(SodamEvent & { entries: SodamEntry[] }) | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [entryOpen, setEntryOpen] = useState(false);
+
+  const reload = useCallback(async () => {
+    try {
+      setEvent(await api.getEvent(bookId, eventId));
+    } catch (e) {
+      onError(friendlyError(e, 'Lỗi tải đám'));
+    }
+  }, [api, bookId, eventId, onError]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  if (!event) return <p className="text-sm text-muted">Đang tải đám…</p>;
+
+  const lex = lexiconForKind(event.kind);
+  const isHosted = event.role === 'HOSTED';
+  const gross = event.totalAmountVnd ?? 0;
+  const settled = event.settledVnd ?? 0;
+  const net = event.netTotalVnd ?? Math.max(0, gross - settled);
+  const dates = eventDateLabels(event.occurredOn);
+
   return (
-    <div className="mx-auto max-w-lg space-y-4">
-      <Btn variant="ghost" onClick={onBack}>
-        ← Quay lại sổ
+    <div className="pb-24">
+      <Btn variant="ghost" onClick={onBack} className="-ml-3">
+        ← Đám
       </Btn>
-      <Panel title="Ảnh sổ" description="Chụp hoặc chọn ảnh — duyệt từng dòng trước khi vào sổ.">
-        <label className="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-xl bg-jade-deep px-4 text-sm font-medium text-[#FAF6EF] transition-colors hover:bg-jade-deep/90">
-          <Camera className="size-4" />
-          Chọn / chụp ảnh
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              void api
-                .photoCandidates(bookId, file)
-                .then((r) => setRows(r.candidates))
-                .catch((err: Error) => {
-                  if (/blocked|403|Forbidden/i.test(err.message)) onAiBlocked();
-                  onError(err.message);
-                });
-            }}
-          />
-        </label>
-        {rows.length === 0 ? (
-          <p className="mt-4 text-center text-sm text-muted">Chưa có dòng nào — chọn ảnh để OCR.</p>
+      <h1 className="mt-1 truncate text-[28px] leading-[34px] font-bold tracking-tight">
+        {event.title}
+      </h1>
+      <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm text-muted">
+        <span>
+          {kindLabel(event.kind)} · {isHosted ? 'Nhận lễ' : 'Đi đám'} · {event.entryCount ?? 0}{' '}
+          {lex.personLabel.toLowerCase()}
+        </span>
+        {dates ? <span>· {dates.solar}</span> : null}
+        {dates?.lunar ? (
+          <span className="inline-flex items-center rounded-full bg-gold-soft px-2.5 py-0.5 text-xs font-semibold text-gold-ink">
+            {dates.lunar}
+          </span>
+        ) : null}
+      </p>
+
+      <div className="mt-4 flex divide-x divide-line overflow-hidden rounded-xl border border-line bg-card">
+        {(isHosted
+          ? [
+              { label: lex.totalLabel, value: gross },
+              { label: 'Còn giữ', value: net },
+              { label: 'Đã trả', value: settled },
+            ]
+          : [{ label: 'Tổng đã đưa', value: gross }]
+        ).map((cell) => (
+          <div key={cell.label} className="min-w-0 flex-1 px-3.5 py-3">
+            <p className="truncate text-xs text-muted">{cell.label}</p>
+            <p className="mt-0.5 truncate font-mono text-[15px] font-semibold tabular-nums">
+              {money(cell.value)}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <section aria-label="Sổ khoản" className="mt-5">
+        <div
+          className="grid grid-cols-[1fr_auto] gap-3 border-b border-line px-3.5 pb-2 text-sm font-medium text-muted sm:grid-cols-[1fr_8rem_7rem_8rem_2rem]"
+          aria-hidden
+        >
+          <span>Người</span>
+          <span className="text-right">Số tiền</span>
+          <span className="hidden sm:block">Nguồn</span>
+          <span className="hidden sm:block">Trả lễ</span>
+          <span className="hidden sm:block" />
+        </div>
+        {event.entries.length === 0 ? (
+          <div className="mt-3 rounded-xl border border-line bg-card">
+            <EmptyLedger
+              title={lex.emptyTitle}
+              body={lex.emptyBody}
+              action={
+                <Btn onClick={() => setEntryOpen(true)}>
+                  <Plus className="size-4" /> Ghi khoản
+                </Btn>
+              }
+            />
+          </div>
         ) : (
-          <ul className="mt-4 overflow-hidden rounded-2xl border border-line">
-            {rows.map((r, i) => (
-              <li key={`${r.name}-${i}`} className="border-b border-line last:border-b-0">
+          <ul className="max-h-[52dvh] divide-y divide-line overflow-y-auto rounded-b-xl border border-t-0 border-line bg-card">
+            {event.entries.map((e) => (
+              <li key={e.id}>
                 <LedgerRow
-                  name={r.name}
-                  amountLabel={money(r.amountVnd)}
-                  meta="Từ ảnh · chờ xác nhận"
+                  name={e.personName}
+                  personId={e.personId ?? undefined}
+                  amountLabel={money(e.amountVnd)}
+                  meta={`${sourceLabel(e.source)} · ${new Date(e.createdAt).toLocaleDateString('vi-VN')}`}
                   trailing={
-                    <span className="flex shrink-0 gap-1.5">
-                      <Btn
-                        onClick={() =>
-                          void api
-                            .createEntry(bookId, eventId, {
-                              personName: r.name,
-                              amountVnd: r.amountVnd,
-                              source: 'PHOTO',
-                            })
-                            .then(() => setRows((prev) => prev.filter((_, j) => j !== i)))
-                        }
-                      >
-                        Đúng
-                      </Btn>
-                      <Btn
-                        variant="secondary"
-                        onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))}
-                      >
-                        Bỏ
-                      </Btn>
-                    </span>
+                    isHosted && e.returnItem ? (
+                      e.returnItem.status === 'DONE' ? (
+                        (e.returnItem.overGivenVnd ?? 0) > 0 ? (
+                          <StatusPill status="OVER" />
+                        ) : (
+                          <StatusPill status="DONE" />
+                        )
+                      ) : e.returnItem.status === 'SKIPPED' ? (
+                        <StatusPill status="SKIPPED" />
+                      ) : (
+                        <StatusPill status="OPEN" />
+                      )
+                    ) : undefined
                   }
+                  onClick={() => setExpandedId((cur) => (cur === e.id ? null : e.id))}
                 />
+                {expandedId === e.id ? (
+                  <EntryExpand
+                    api={api}
+                    bookId={bookId}
+                    event={event}
+                    entry={e}
+                    onDone={() => void reload()}
+                    onError={onError}
+                  />
+                ) : null}
               </li>
             ))}
           </ul>
         )}
-      </Panel>
+      </section>
+
+      <StickyActionBar totalLabel={lex.totalLabel} totalValue={money(gross)} chip={outboxChip}>
+        <Btn onClick={() => setEntryOpen(true)}>
+          <Plus className="size-4" /> Ghi khoản
+        </Btn>
+      </StickyActionBar>
+
+      {entryOpen ? (
+        <EntrySheet
+          api={api}
+          bookId={bookId}
+          event={event}
+          online={online}
+          enqueue={enqueue}
+          onClose={() => setEntryOpen(false)}
+          onSaved={() => void reload()}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** Phần mở rộng trong hàng sổ: trả lễ (có xác nhận nêu hệ quả) + sửa + xoá khoản. */
+function EntryExpand({
+  api,
+  bookId,
+  event,
+  entry,
+  onDone,
+  onError,
+}: {
+  api: SodamApi;
+  bookId: string;
+  event: SodamEvent;
+  entry: SodamEntry;
+  onDone: () => void;
+  onError: (m: string | null) => void;
+}) {
+  const lex = lexiconForKind(event.kind);
+  const ret = entry.returnItem;
+  const received = ret?.receivedAmountVnd ?? entry.amountVnd;
+  const [pay, setPay] = useState(String(received));
+  const [confirming, setConfirming] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editName, setEditName] = useState(entry.personName);
+  const [editAmount, setEditAmount] = useState(String(entry.amountVnd));
+  const [editNote, setEditNote] = useState(entry.note ?? '');
+  const [editError, setEditError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const payNum = Number(pay.replace(/\D/g, '')) || 0;
+
+  const run = async (fn: () => Promise<unknown>, fallback: string) => {
+    setBusy(true);
+    try {
+      await fn();
+      onDone();
+    } catch (e) {
+      onError(friendlyError(e, fallback));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="animate-row border-t border-line bg-paper px-3.5 py-3.5">
+      {event.role === 'HOSTED' && ret ? (
+        <div className="mb-4">
+          {ret.status === 'OPEN' ? (
+            <>
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+                <Field label="Số tiền trả lễ">
+                  <Input
+                    inputMode="numeric"
+                    value={formatAmountInput(pay)}
+                    onChange={(e) => setPay(e.target.value.replace(/\D/g, ''))}
+                    aria-label={`Số tiền trả lễ cho ${entry.personName}`}
+                  />
+                </Field>
+                {!confirming ? (
+                  <Btn disabled={payNum <= 0} onClick={() => setConfirming(true)}>
+                    Trả lễ
+                  </Btn>
+                ) : null}
+              </div>
+              <div className="mt-2">
+                <QuickAmounts onPick={(v) => setPay(String(v))} />
+              </div>
+              {confirming ? (
+                <div
+                  role="group"
+                  aria-label="Xác nhận trả lễ"
+                  className="mt-3 rounded-[10px] border border-line-strong bg-card px-3 py-3"
+                >
+                  <p className="text-sm">
+                    Trả <span className="font-mono font-semibold">{money(payNum)}</span> cho{' '}
+                    {entry.personName}? Khoản này sẽ trừ đúng{' '}
+                    <span className="font-mono font-semibold">{money(received)}</span>{' '}
+                    {lex.entryNoun} khỏi số còn giữ của sổ.
+                  </p>
+                  <div className="mt-2.5 flex gap-2">
+                    <Btn
+                      disabled={busy}
+                      onClick={() =>
+                        void run(
+                          () =>
+                            api.markReturn(bookId, ret.id, { status: 'DONE', amountVnd: payNum }),
+                          'Chưa ghi được trả lễ',
+                        )
+                      }
+                    >
+                      Xác nhận trả
+                    </Btn>
+                    <Btn variant="secondary" onClick={() => setConfirming(false)}>
+                      Huỷ
+                    </Btn>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          ) : ret.status === 'DONE' ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm text-muted">
+                Đã trả{' '}
+                <span className="font-mono font-semibold text-ink">
+                  {money(ret.returnedAmountVnd ?? received)}
+                </span>
+                {(ret.overGivenVnd ?? 0) > 0 ? (
+                  <>
+                    {' '}
+                    · đi nhiều hơn{' '}
+                    <span className="font-mono font-semibold text-lacquer">
+                      {money(ret.overGivenVnd!)}
+                    </span>
+                  </>
+                ) : null}
+              </p>
+              <Btn
+                variant="secondary"
+                disabled={busy}
+                onClick={() =>
+                  void run(
+                    () => api.markReturn(bookId, ret.id, { status: 'OPEN' }),
+                    'Chưa hoàn tác được',
+                  )
+                }
+              >
+                <Undo2 className="size-4" /> Hoàn tác
+              </Btn>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm text-muted">Đã bỏ qua trả lễ cho khoản này.</p>
+              <Btn
+                variant="secondary"
+                disabled={busy}
+                onClick={() =>
+                  void run(
+                    () => api.markReturn(bookId, ret.id, { status: 'OPEN' }),
+                    'Chưa mở lại được',
+                  )
+                }
+              >
+                <Undo2 className="size-4" /> Mở lại
+              </Btn>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      <div className="grid gap-2 sm:grid-cols-[1fr_9rem_1fr_auto] sm:items-end">
+        <Field label="Tên">
+          <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+        </Field>
+        <Field label="Số tiền">
+          <Input
+            inputMode="numeric"
+            value={formatAmountInput(editAmount)}
+            onChange={(e) => setEditAmount(e.target.value.replace(/\D/g, ''))}
+          />
+        </Field>
+        <Field label="Ghi chú">
+          <Input value={editNote} onChange={(e) => setEditNote(e.target.value)} />
+        </Field>
+        <Btn
+          variant="secondary"
+          disabled={busy}
+          onClick={() => {
+            const amt = Number(editAmount.replace(/\D/g, '')) || 0;
+            if (!editName.trim()) {
+              setEditError('Tên không được để trống.');
+              return;
+            }
+            if (amt <= 0) {
+              setEditError('Số tiền phải lớn hơn 0.');
+              return;
+            }
+            setEditError(null);
+            void run(
+              () =>
+                api.updateEntry(bookId, event.id, entry.id, {
+                  personName: editName.trim(),
+                  amountVnd: amt,
+                  note: editNote,
+                }),
+              'Chưa sửa được khoản',
+            );
+          }}
+        >
+          <Pencil className="size-4" /> Lưu sửa
+        </Btn>
+      </div>
+      {editError ? (
+        <p role="alert" className="mt-2 text-sm font-medium text-lacquer">
+          {editError}
+        </p>
+      ) : null}
+
+      <div className="mt-3 border-t border-line pt-3">
+        {!confirmDelete ? (
+          <Btn
+            variant="ghost"
+            className="text-lacquer hover:bg-lacquer/5"
+            onClick={() => setConfirmDelete(true)}
+          >
+            <Trash2 className="size-4" /> Xoá khoản
+          </Btn>
+        ) : (
+          <div
+            role="group"
+            aria-label="Xác nhận xoá khoản"
+            className="rounded-[10px] border border-lacquer bg-card px-3 py-3"
+          >
+            <p className="text-sm">
+              Xoá khoản {lex.entryNoun}{' '}
+              <span className="font-mono font-semibold">{money(entry.amountVnd)}</span> của{' '}
+              {entry.personName}? Khoản này sẽ mất khỏi sổ và các tổng sẽ tính lại ngay.
+            </p>
+            <div className="mt-2.5 flex gap-2">
+              <Btn
+                variant="danger"
+                disabled={busy}
+                onClick={() =>
+                  void run(() => api.deleteEntry(bookId, event.id, entry.id), 'Chưa xoá được khoản')
+                }
+              >
+                Xoá hẳn
+              </Btn>
+              <Btn variant="secondary" onClick={() => setConfirmDelete(false)}>
+                Huỷ
+              </Btn>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1496,112 +1593,464 @@ function PhotoView({
 function ReturnsView({
   api,
   bookId,
+  bookName,
+  onGoDashboard,
   onError,
 }: {
   api: SodamApi;
   bookId: string;
+  bookName?: string;
+  onGoDashboard: () => void;
   onError: (m: string | null) => void;
 }) {
-  const [rows, setRows] = useState<SodamReturnItem[]>([]);
-  const [amounts, setAmounts] = useState<Record<string, string>>({});
+  const [all, setAll] = useState<SodamReturnItem[] | null>(null);
+  const [filter, setFilter] = useState('OPEN');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
   const reload = useCallback(async () => {
     try {
-      const list = await api.listReturns(bookId, 'OPEN');
-      setRows(list);
-      setAmounts((prev) => {
-        const next = { ...prev };
-        for (const r of list) {
-          if (next[r.id] == null) {
-            next[r.id] = String(r.receivedAmountVnd ?? r.suggestedAmountVnd ?? 0);
-          }
-        }
-        return next;
-      });
+      setAll(await api.listReturns(bookId));
     } catch (e) {
-      onError(e instanceof Error ? e.message : 'Lỗi trả lễ');
+      onError(friendlyError(e, 'Lỗi tải danh sách trả lễ'));
     }
   }, [api, bookId, onError]);
+
   useEffect(() => {
     void reload();
   }, [reload]);
 
+  if (!all) return <p className="text-sm text-muted">Đang tải danh sách trả lễ…</p>;
+
+  const receivedOf = (r: SodamReturnItem) => r.receivedAmountVnd ?? r.suggestedAmountVnd ?? 0;
+  const open = all.filter((r) => r.status === 'OPEN');
+  const done = all.filter((r) => r.status === 'DONE');
+  const skipped = all.filter((r) => r.status === 'SKIPPED');
+  const over = done.filter((r) => (r.overGivenVnd ?? 0) > 0);
+  const shown = filter === 'OPEN' ? open : filter === 'OVER' ? over : [...done, ...skipped];
+
   return (
-    <Panel
-      title="Cần trả lễ"
-      description="Nhập số mình đi. Tổng sổ trừ đúng số khách đã mừng; phần đi nhiều hơn được ghi riêng."
-    >
-      {rows.length === 0 ? (
-        <EmptyState
-          title="Không còn khoản mở"
-          body="Khi có khách mừng trong đám nhận lễ, họ hiện ở đây và trên từng hàng sổ khách."
+    <div>
+      <h1 className="sr-only">Trả lễ{bookName ? ` — ${bookName}` : ''}</h1>
+      <div className="flex divide-x divide-line overflow-hidden rounded-xl border border-line bg-card">
+        {[
+          { label: 'Chờ trả', value: open.reduce((s, r) => s + receivedOf(r), 0) },
+          {
+            label: 'Đã trả',
+            value: done.reduce((s, r) => s + (r.returnedAmountVnd ?? r.doneAmountVnd ?? 0), 0),
+          },
+          { label: 'Quá tay', value: over.reduce((s, r) => s + (r.overGivenVnd ?? 0), 0) },
+        ].map((cell) => (
+          <div key={cell.label} className="min-w-0 flex-1 px-3.5 py-3">
+            <p className="text-xs text-muted">{cell.label}</p>
+            <p className="mt-0.5 truncate font-mono text-[15px] font-semibold tabular-nums">
+              {money(cell.value)}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4">
+        <SegmentedTabs
+          ariaLabel="Lọc khoản trả lễ"
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { id: 'OPEN', label: `Chờ trả (${open.length})` },
+            { id: 'DONE', label: 'Đã trả' },
+            { id: 'OVER', label: 'Quá tay' },
+          ]}
         />
+      </div>
+
+      {shown.length === 0 ? (
+        <div className="mt-4 rounded-xl border border-line bg-card">
+          <EmptyLedger
+            title={
+              filter === 'OPEN'
+                ? 'Không còn khoản chờ trả'
+                : filter === 'OVER'
+                  ? 'Chưa có khoản quá tay'
+                  : 'Chưa có khoản đã trả'
+            }
+            body={
+              filter === 'OPEN'
+                ? 'Khi có khách mừng trong đám nhà mình tổ chức, khoản cần trả sẽ hiện ở đây.'
+                : 'Các khoản đã xử lý sẽ hiện ở đây để nhà mình đối chiếu.'
+            }
+            action={
+              <Btn variant="secondary" onClick={onGoDashboard}>
+                Về mục Đám
+              </Btn>
+            }
+          />
+        </div>
       ) : (
-        <ul className="space-y-3">
-          {rows.map((r) => {
-            const received = r.receivedAmountVnd ?? r.suggestedAmountVnd ?? 0;
-            const payStr = amounts[r.id] ?? String(received);
-            const payNum = Number(payStr.replace(/\D/g, '')) || 0;
-            const over = Math.max(0, payNum - received);
+        <ul className="mt-4 max-h-[56dvh] divide-y divide-line overflow-y-auto rounded-xl border border-line bg-card">
+          {shown.map((r) => {
+            const isOver = (r.overGivenVnd ?? 0) > 0;
             return (
-              <li key={r.id} className="rounded-2xl border border-line bg-card p-3.5">
-                <div className="flex items-start gap-3">
-                  <PersonAvatar name={r.personName ?? r.personId} size="lg" />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-ink">{r.personName ?? r.personId}</p>
-                    <p className="mt-0.5 text-xs text-muted">
-                      {r.fromEventTitle ? `${r.fromEventTitle} · ` : ''}
-                      Họ đã mừng{' '}
-                      <span className="font-mono font-semibold text-ink">{money(received)}</span>
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-end">
-                  <Field label="Số mình trả">
-                    <Input
-                      inputMode="numeric"
-                      value={formatAmountInput(payStr)}
-                      onChange={(e) =>
-                        setAmounts((m) => ({ ...m, [r.id]: e.target.value.replace(/\D/g, '') }))
-                      }
-                    />
-                  </Field>
-                  <Btn
-                    onClick={() =>
-                      void api
-                        .markReturn(bookId, r.id, { status: 'DONE', amountVnd: payNum })
-                        .then(reload)
-                        .catch((err: Error) => onError(err.message))
-                    }
-                  >
-                    Đã trả
-                  </Btn>
-                  <Btn
-                    variant="secondary"
-                    onClick={() =>
-                      void api.markReturn(bookId, r.id, { status: 'SKIPPED' }).then(reload)
-                    }
-                  >
-                    Bỏ qua
-                  </Btn>
-                </div>
-                <div className="mt-2">
-                  <QuickAmounts onPick={(v) => setAmounts((m) => ({ ...m, [r.id]: String(v) }))} />
-                </div>
-                {over > 0 ? (
-                  <p className="mt-2 text-xs font-medium text-accent">
-                    Đi nhiều hơn {money(over)} — tổng còn giữ chỉ trừ {money(received)}.
-                  </p>
-                ) : (
-                  <p className="mt-2 text-xs text-muted">
-                    Trả đúng / ít hơn: vẫn trừ {money(received)} khỏi tổng còn giữ.
-                  </p>
-                )}
+              <li key={r.id}>
+                <LedgerRow
+                  name={r.personName ?? r.personId}
+                  personId={r.personId}
+                  amountLabel={money(receivedOf(r))}
+                  meta={r.fromEventTitle ?? undefined}
+                  trailing={
+                    r.status === 'OPEN' ? (
+                      <StatusPill status="OPEN" />
+                    ) : r.status === 'SKIPPED' ? (
+                      <StatusPill status="SKIPPED" />
+                    ) : isOver ? (
+                      <StatusPill status="OVER" />
+                    ) : (
+                      <StatusPill status="DONE" />
+                    )
+                  }
+                  onClick={() => setExpandedId((cur) => (cur === r.id ? null : r.id))}
+                />
+                {expandedId === r.id ? (
+                  <ReturnExpand
+                    api={api}
+                    bookId={bookId}
+                    item={r}
+                    onDone={() => void reload()}
+                    onError={onError}
+                  />
+                ) : null}
               </li>
             );
           })}
         </ul>
       )}
-    </Panel>
+    </div>
+  );
+}
+
+function ReturnExpand({
+  api,
+  bookId,
+  item,
+  onDone,
+  onError,
+}: {
+  api: SodamApi;
+  bookId: string;
+  item: SodamReturnItem;
+  onDone: () => void;
+  onError: (m: string | null) => void;
+}) {
+  const received = item.receivedAmountVnd ?? item.suggestedAmountVnd ?? 0;
+  const [pay, setPay] = useState(String(received));
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const payNum = Number(pay.replace(/\D/g, '')) || 0;
+  const name = item.personName ?? item.personId;
+
+  const run = async (fn: () => Promise<unknown>, fallback: string) => {
+    setBusy(true);
+    try {
+      await fn();
+      onDone();
+    } catch (e) {
+      onError(friendlyError(e, fallback));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (item.status !== 'OPEN') {
+    return (
+      <div className="animate-row flex flex-wrap items-center gap-2 border-t border-line bg-paper px-3.5 py-3">
+        <p className="text-sm text-muted">
+          {item.status === 'DONE' ? (
+            <>
+              Đã trả{' '}
+              <span className="font-mono font-semibold text-ink">
+                {money(item.returnedAmountVnd ?? item.doneAmountVnd ?? received)}
+              </span>
+              {(item.overGivenVnd ?? 0) > 0 ? (
+                <>
+                  {' '}
+                  · đi nhiều hơn{' '}
+                  <span className="font-mono font-semibold text-lacquer">
+                    {money(item.overGivenVnd!)}
+                  </span>{' '}
+                  so với số đã nhận
+                </>
+              ) : null}
+            </>
+          ) : (
+            'Đã bỏ qua khoản trả lễ này.'
+          )}
+        </p>
+        <Btn
+          variant="secondary"
+          disabled={busy}
+          onClick={() =>
+            void run(
+              () => api.markReturn(bookId, item.id, { status: 'OPEN' }),
+              'Chưa hoàn tác được',
+            )
+          }
+        >
+          <Undo2 className="size-4" /> Hoàn tác
+        </Btn>
+      </div>
+    );
+  }
+
+  return (
+    <div className="animate-row border-t border-line bg-paper px-3.5 py-3.5">
+      <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+        <Field label="Số tiền mình trả">
+          <Input
+            inputMode="numeric"
+            value={formatAmountInput(pay)}
+            onChange={(e) => setPay(e.target.value.replace(/\D/g, ''))}
+            aria-label={`Số tiền trả lễ cho ${name}`}
+          />
+        </Field>
+        {!confirming ? (
+          <>
+            <Btn disabled={payNum <= 0} onClick={() => setConfirming(true)}>
+              Đã trả
+            </Btn>
+            <Btn
+              variant="secondary"
+              disabled={busy}
+              onClick={() =>
+                void run(
+                  () => api.markReturn(bookId, item.id, { status: 'SKIPPED' }),
+                  'Chưa bỏ qua được',
+                )
+              }
+            >
+              Bỏ qua
+            </Btn>
+          </>
+        ) : null}
+      </div>
+      <div className="mt-2">
+        <QuickAmounts onPick={(v) => setPay(String(v))} />
+      </div>
+      {confirming ? (
+        <div
+          role="group"
+          aria-label="Xác nhận trả lễ"
+          className="mt-3 rounded-[10px] border border-line-strong bg-card px-3 py-3"
+        >
+          <p className="text-sm">
+            Trả <span className="font-mono font-semibold">{money(payNum)}</span> cho {name}? Khoản
+            này sẽ trừ đúng <span className="font-mono font-semibold">{money(received)}</span> tiền
+            đã nhận khỏi số còn giữ của sổ.
+          </p>
+          <div className="mt-2.5 flex gap-2">
+            <Btn
+              disabled={busy}
+              onClick={() =>
+                void run(
+                  () => api.markReturn(bookId, item.id, { status: 'DONE', amountVnd: payNum }),
+                  'Chưa ghi được trả lễ',
+                )
+              }
+            >
+              Xác nhận trả
+            </Btn>
+            <Btn variant="secondary" onClick={() => setConfirming(false)}>
+              Huỷ
+            </Btn>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-2 text-sm text-muted">
+          Họ đã mừng <span className="font-mono font-medium text-ink">{money(received)}</span> — số
+          trả mặc định bằng số đã nhận, sửa được trước khi xác nhận.
+        </p>
+      )}
+    </div>
+  );
+}
+
+type PersonAggregate = {
+  person: SodamPerson;
+  received: number;
+  given: number;
+  history: Array<{ entry: SodamEntry; eventTitle: string; role: SodamEventRole }>;
+};
+
+function PeopleView({
+  api,
+  bookId,
+  bookName,
+  onError,
+}: {
+  api: SodamApi;
+  bookId: string;
+  bookName?: string;
+  onError: (m: string | null) => void;
+}) {
+  const [q, setQ] = useState('');
+  const [rows, setRows] = useState<PersonAggregate[] | null>(null);
+  const [selected, setSelected] = useState<PersonAggregate | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [people, events] = await Promise.all([
+          api.listPeople(bookId),
+          api.listEvents(bookId),
+        ]);
+        const details = await Promise.all(
+          events.map((e) => api.getEvent(bookId, e.id).catch(() => null)),
+        );
+        const map = new Map<string, PersonAggregate>();
+        for (const p of people) {
+          map.set(p.id, { person: p, received: 0, given: 0, history: [] });
+        }
+        for (const detail of details) {
+          if (!detail) continue;
+          for (const entry of detail.entries) {
+            const key = entry.personId ?? entry.personName;
+            let agg = map.get(key);
+            if (!agg) {
+              agg = {
+                person: {
+                  id: key,
+                  bookId,
+                  displayName: entry.personName,
+                  note: '',
+                  createdAt: entry.createdAt,
+                  updatedAt: entry.updatedAt,
+                },
+                received: 0,
+                given: 0,
+                history: [],
+              };
+              map.set(key, agg);
+            }
+            if (detail.role === 'HOSTED') agg.received += entry.amountVnd;
+            else agg.given += entry.amountVnd;
+            agg.history.push({ entry, eventTitle: detail.title, role: detail.role });
+          }
+        }
+        setRows(
+          [...map.values()].sort((a, b) =>
+            a.person.displayName.localeCompare(b.person.displayName, 'vi'),
+          ),
+        );
+      } catch (e) {
+        onError(friendlyError(e, 'Lỗi tải danh sách người'));
+        setRows([]);
+      }
+    })();
+  }, [api, bookId, onError]);
+
+  const shown = (rows ?? []).filter((r) =>
+    r.person.displayName.toLowerCase().includes(q.trim().toLowerCase()),
+  );
+
+  return (
+    <div>
+      <h1 className="sr-only">Người{bookName ? ` — ${bookName}` : ''}</h1>
+      <div className="relative">
+        <Search
+          className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted"
+          aria-hidden
+        />
+        <Input
+          aria-label="Tìm người"
+          className="pl-9"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Nhập tên…"
+        />
+      </div>
+
+      {rows === null ? (
+        <p className="mt-4 text-sm text-muted">Đang tải danh sách người…</p>
+      ) : shown.length === 0 ? (
+        <div className="mt-4 rounded-xl border border-line bg-card">
+          <EmptyLedger
+            title={q.trim() ? 'Không thấy người này' : 'Chưa có ai trong sổ'}
+            body={
+              q.trim()
+                ? 'Thử gõ tên khác, hoặc người này chưa được ghi khoản nào.'
+                : 'Ghi khoản đầu tiên ở mục Đám — người được ghi sẽ hiện ở đây.'
+            }
+          />
+        </div>
+      ) : (
+        <ul className="mt-4 max-h-[62dvh] divide-y divide-line overflow-y-auto rounded-xl border border-line bg-card">
+          {shown.map((r) => (
+            <li key={r.person.id}>
+              <button
+                type="button"
+                onClick={() => setSelected(r)}
+                className="flex min-h-[52px] w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
+              >
+                <PersonAvatar name={r.person.displayName} seed={r.person.id} size="md" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[15px] font-medium">
+                    {r.person.displayName}
+                  </span>
+                  <span className="mt-0.5 block truncate text-xs text-muted">
+                    {r.history.length} khoản qua lại
+                  </span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className="block font-mono text-[13px] font-medium tabular-nums">
+                    +{money(r.received)}
+                  </span>
+                  <span className="block font-mono text-[13px] font-medium tabular-nums text-lacquer">
+                    −{money(r.given)}
+                  </span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Sheet
+        open={Boolean(selected)}
+        title={selected?.person.displayName ?? 'Người'}
+        onClose={() => setSelected(null)}
+      >
+        {selected ? (
+          <div>
+            <p className="text-sm text-muted">
+              Đã nhận{' '}
+              <span className="font-mono font-semibold text-ink">{money(selected.received)}</span>
+              {' · Đã đi '}
+              <span className="font-mono font-semibold text-lacquer">{money(selected.given)}</span>
+            </p>
+            {selected.history.length === 0 ? (
+              <p className="mt-3 text-sm text-muted">Chưa có lịch sử qua lại.</p>
+            ) : (
+              <ul className="mt-3 max-h-[46dvh] divide-y divide-line overflow-y-auto rounded-xl border border-line">
+                {selected.history.map(({ entry, eventTitle, role }) => (
+                  <li
+                    key={entry.id}
+                    className="flex min-h-12 items-center justify-between gap-3 px-3.5 py-2 text-sm"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">{eventTitle}</span>
+                      <span className="block text-xs text-muted">
+                        {role === 'HOSTED' ? 'Nhận lễ' : 'Đi đám'} · {sourceLabel(entry.source)} ·{' '}
+                        {new Date(entry.createdAt).toLocaleDateString('vi-VN')}
+                      </span>
+                    </span>
+                    <span className="shrink-0 font-mono text-[15px] font-semibold tabular-nums">
+                      {money(entry.amountVnd)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
+      </Sheet>
+    </div>
   );
 }
 
@@ -1616,18 +2065,25 @@ const RELATION_LABELS: Record<SodamRelationType, string> = {
 function TreeView({
   api,
   bookId,
+  bookName,
   onError,
 }: {
   api: SodamApi;
   bookId: string;
+  bookName?: string;
   onError: (m: string | null) => void;
 }) {
   const [people, setPeople] = useState<SodamPerson[] | null>(null);
   const [relations, setRelations] = useState<SodamRelation[]>([]);
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
   const [fromId, setFromId] = useState('');
   const [toId, setToId] = useState('');
   const [relType, setRelType] = useState<SodamRelationType>('OTHER');
+  const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmRelId, setConfirmRelId] = useState<string | null>(null);
+  const [relBusy, setRelBusy] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -1635,13 +2091,10 @@ function TreeView({
       setPeople(t.people);
       setRelations(t.relations);
       setFromId((prev) => prev || t.people[0]?.id || '');
-      setToId((prev) => {
-        if (prev && prev !== (t.people[0]?.id ?? '')) return prev;
-        return t.people[1]?.id ?? t.people[0]?.id ?? '';
-      });
+      setToId((prev) => prev || t.people[1]?.id || t.people[0]?.id || '');
       onError(null);
     } catch (e) {
-      onError(e instanceof Error ? e.message : 'Lỗi cây họ');
+      onError(friendlyError(e, 'Lỗi tải cây họ'));
     }
   }, [api, bookId, onError]);
 
@@ -1650,104 +2103,99 @@ function TreeView({
   }, [reload]);
 
   if (people === null) {
-    return (
-      <Panel title="Cây họ hàng" description="Đang tải…">
-        <div className="flex min-h-[220px] items-center justify-center">
-          <p className="text-sm text-muted">Đang tải danh sách người trong sổ…</p>
-        </div>
-      </Panel>
-    );
+    return <p className="text-sm text-muted">Đang tải cây họ…</p>;
   }
 
-  if (people.length === 0) {
-    return (
-      <Panel title="Cây họ hàng" description="Gắn quan hệ để tra cứu trong nhà.">
-        <div className="rounded-2xl border border-dashed border-line bg-paper px-4 py-6">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/products/sodam-tree.svg"
-            alt=""
-            width={480}
-            height={280}
-            className="mx-auto h-auto w-full max-w-sm"
-          />
-          <h3 className="mt-4 text-center font-display text-lg font-semibold text-ink">
-            Chưa có ai trong sổ
-          </h3>
-          <p className="mx-auto mt-1.5 max-w-sm text-center text-sm leading-relaxed text-muted">
-            Ghi nhận lễ trước (voice / ảnh / tay) — mỗi khách sẽ hiện ở đây để gắn vợ chồng, anh
-            chị, họ hàng.
-          </p>
-        </div>
-      </Panel>
-    );
-  }
+  const nameOf = (id: string) => people.find((p) => p.id === id)?.displayName ?? id;
+
+  const removeRelation = async (relationId: string) => {
+    setRelBusy(true);
+    try {
+      await api.deleteRelation(bookId, relationId);
+      setConfirmRelId(null);
+      await reload();
+    } catch (e) {
+      onError(friendlyError(e, 'Chưa xoá được quan hệ'));
+    } finally {
+      setRelBusy(false);
+    }
+  };
 
   return (
-    <div className="space-y-4">
-      <Panel
-        title="Cây họ hàng"
-        description="Chọn hai người và loại quan hệ — dùng khi hỏi “với ai” trong nhà."
-      >
-        <div className="mb-5 overflow-hidden rounded-2xl border border-line bg-paper">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/products/sodam-tree.svg"
-            alt=""
-            width={480}
-            height={280}
-            className="mx-auto h-auto w-full max-w-lg object-contain px-4 pt-4"
+    <div>
+      <h1 className="sr-only">Cây họ{bookName ? ` — ${bookName}` : ''}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted">
+          {people.length} người · {relations.length} quan hệ đã gắn
+        </p>
+        <div className="flex gap-2">
+          <Btn variant="secondary" onClick={() => setListOpen(true)}>
+            Quan hệ đã gắn
+          </Btn>
+          <Btn disabled={people.length < 2} onClick={() => setAttachOpen(true)}>
+            <Plus className="size-4" /> Gắn quan hệ
+          </Btn>
+        </div>
+      </div>
+
+      {people.length === 0 ? (
+        <div className="mt-4 rounded-xl border border-line bg-card">
+          <EmptyLedger
+            title="Chưa có ai trong sổ"
+            body="Ghi khoản đầu tiên ở mục Đám — mỗi người được ghi sẽ hiện ở đây để gắn quan hệ."
           />
-          <div className="flex flex-wrap justify-center gap-2 px-4 pb-4">
-            {people.slice(0, 8).map((p) => (
+        </div>
+      ) : (
+        <div className="mt-4 max-h-[58dvh] overflow-auto rounded-xl border border-line bg-card p-4">
+          <div className="flex min-w-[560px] flex-wrap gap-2">
+            {people.map((p) => (
               <span
                 key={p.id}
-                className="inline-flex items-center gap-2 rounded-full border border-line bg-card px-2.5 py-1.5"
+                className="inline-flex items-center gap-2 rounded-full border border-line bg-paper py-1.5 pr-3 pl-1.5"
               >
-                <PersonAvatar name={p.displayName} size="sm" />
-                <span className="max-w-[7rem] truncate text-xs font-medium text-ink">
-                  {p.displayName}
-                </span>
+                <PersonAvatar name={p.displayName} seed={p.id} size="sm" />
+                <span className="text-sm font-medium">{p.displayName}</span>
               </span>
             ))}
-            {people.length > 8 ? (
-              <span className="inline-flex min-h-8 items-center rounded-full border border-line bg-card px-3 text-xs text-muted">
-                +{people.length - 8} người
-              </span>
-            ) : null}
           </div>
+          {relations.length > 0 ? (
+            <ul className="mt-4 space-y-1.5">
+              {relations.slice(0, 12).map((r) => (
+                <li key={r.id} className="text-sm text-muted">
+                  <span className="font-medium text-ink">{nameOf(r.fromPersonId)}</span>
+                  {' — '}
+                  {RELATION_LABELS[r.type] ?? r.type}
+                  {' — '}
+                  <span className="font-medium text-ink">{nameOf(r.toPersonId)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
+      )}
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <Sheet open={attachOpen} title="Gắn quan hệ" onClose={() => setAttachOpen(false)}>
+        <div className="space-y-3">
           <Field label="Từ người">
-            <select
-              className="min-h-11 w-full rounded-xl border border-line bg-paper px-3 text-sm outline-none transition hover:border-ink/20 focus:border-accent focus:ring-2 focus:ring-accent/20"
-              value={fromId}
-              onChange={(e) => setFromId(e.target.value)}
-            >
+            <Select value={fromId} onChange={(e) => setFromId(e.target.value)}>
               {people.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.displayName}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Đến người">
-            <select
-              className="min-h-11 w-full rounded-xl border border-line bg-paper px-3 text-sm outline-none transition hover:border-ink/20 focus:border-accent focus:ring-2 focus:ring-accent/20"
-              value={toId}
-              onChange={(e) => setToId(e.target.value)}
-            >
+            <Select value={toId} onChange={(e) => setToId(e.target.value)}>
               {people.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.displayName}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
-          <Field label="Loại quan hệ">
-            <select
-              className="min-h-11 w-full rounded-xl border border-line bg-paper px-3 text-sm outline-none transition hover:border-ink/20 focus:border-accent focus:ring-2 focus:ring-accent/20"
+          <Field label="Loại quan hệ" error={formError}>
+            <Select
               value={relType}
               onChange={(e) => setRelType(e.target.value as SodamRelationType)}
             >
@@ -1756,146 +2204,90 @@ function TreeView({
                   {RELATION_LABELS[k]}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
-          <div className="flex items-end">
-            <Btn
-              className="w-full"
-              disabled={busy || !fromId || !toId || fromId === toId}
-              onClick={() =>
-                void (async () => {
-                  if (!fromId || !toId || fromId === toId) return;
-                  setBusy(true);
-                  try {
-                    await api.createRelation(bookId, {
-                      fromPersonId: fromId,
-                      toPersonId: toId,
-                      type: relType,
-                    });
-                    await reload();
-                  } catch (e) {
-                    onError(e instanceof Error ? e.message : 'Gắn quan hệ lỗi');
-                  } finally {
-                    setBusy(false);
-                  }
-                })()
+          <Btn
+            className="w-full"
+            disabled={busy || !fromId || !toId}
+            onClick={() => {
+              if (fromId === toId) {
+                setFormError('Hai người phải khác nhau — chọn lại người thứ hai.');
+                return;
               }
-            >
-              Gắn quan hệ
-            </Btn>
-          </div>
+              setFormError(null);
+              setBusy(true);
+              void api
+                .createRelation(bookId, { fromPersonId: fromId, toPersonId: toId, type: relType })
+                .then(async () => {
+                  await reload();
+                  setAttachOpen(false);
+                })
+                .catch((e: Error) => onError(friendlyError(e, 'Gắn quan hệ lỗi')))
+                .finally(() => setBusy(false));
+            }}
+          >
+            Gắn quan hệ
+          </Btn>
         </div>
-      </Panel>
+      </Sheet>
 
-      <Panel
-        title="Quan hệ đã gắn"
-        description={
-          relations.length === 0
-            ? 'Chưa có liên kết — gắn cặp đầu tiên ở trên.'
-            : `${relations.length} liên kết trong sổ`
-        }
-      >
+      <Sheet open={listOpen} title="Quan hệ đã gắn" onClose={() => setListOpen(false)}>
         {relations.length === 0 ? (
-          <EmptyState
-            title="Cây còn trống"
-            body="Chọn hai người và loại quan hệ rồi bấm Gắn quan hệ. Sau đó tra cứu “với ai” sẽ rõ hơn."
+          <EmptyLedger
+            title="Chưa có quan hệ nào"
+            body="Bấm Gắn quan hệ để nối hai người đầu tiên trong cây họ."
           />
         ) : (
-          <ul className="overflow-hidden rounded-2xl border border-line">
-            {relations.map((r) => {
-              const from =
-                people.find((p) => p.id === r.fromPersonId)?.displayName ?? r.fromPersonId;
-              const to = people.find((p) => p.id === r.toPersonId)?.displayName ?? r.toPersonId;
-              return (
-                <li
-                  key={r.id}
-                  className="flex min-h-14 flex-wrap items-center gap-2 border-b border-line px-3.5 py-2.5 last:border-b-0"
-                >
-                  <PersonAvatar name={from} size="sm" />
-                  <span className="max-w-[8rem] truncate text-xs font-semibold text-ink sm:max-w-none">
-                    {from}
-                  </span>
-                  <span className="rounded-full border border-accent/25 bg-[#E8F7F4] px-2.5 py-0.5 text-[10px] font-semibold tracking-wide text-accent uppercase">
+          <ul className="max-h-[56dvh] divide-y divide-line overflow-y-auto rounded-xl border border-line">
+            {relations.map((r) => (
+              <li key={r.id} className="px-3.5 py-2.5 text-sm">
+                <div className="flex min-h-12 items-center gap-2">
+                  <PersonAvatar name={nameOf(r.fromPersonId)} seed={r.fromPersonId} size="sm" />
+                  <span className="font-medium">{nameOf(r.fromPersonId)}</span>
+                  <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
                     {RELATION_LABELS[r.type] ?? r.type}
                   </span>
-                  <PersonAvatar name={to} size="sm" />
-                  <span className="min-w-0 truncate text-xs font-semibold text-ink">{to}</span>
-                </li>
-              );
-            })}
+                  <PersonAvatar name={nameOf(r.toPersonId)} seed={r.toPersonId} size="sm" />
+                  <span className="font-medium">{nameOf(r.toPersonId)}</span>
+                  <Btn
+                    variant="ghost"
+                    className="ml-auto shrink-0 text-lacquer hover:bg-lacquer/5"
+                    aria-label={`Xoá quan hệ giữa ${nameOf(r.fromPersonId)} và ${nameOf(r.toPersonId)}`}
+                    onClick={() => setConfirmRelId(r.id)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Btn>
+                </div>
+                {confirmRelId === r.id ? (
+                  <div
+                    role="group"
+                    aria-label="Xác nhận xoá quan hệ"
+                    className="mt-2 rounded-[10px] border border-lacquer bg-card px-3 py-3"
+                  >
+                    <p className="text-sm">
+                      Xoá quan hệ {RELATION_LABELS[r.type] ?? r.type} giữa {nameOf(r.fromPersonId)}{' '}
+                      và {nameOf(r.toPersonId)}? Cây họ sẽ không còn nối hai người này — các khoản
+                      lễ trong sổ không thay đổi.
+                    </p>
+                    <div className="mt-2.5 flex gap-2">
+                      <Btn
+                        variant="danger"
+                        disabled={relBusy}
+                        onClick={() => void removeRelation(r.id)}
+                      >
+                        Xoá hẳn
+                      </Btn>
+                      <Btn variant="secondary" onClick={() => setConfirmRelId(null)}>
+                        Huỷ
+                      </Btn>
+                    </div>
+                  </div>
+                ) : null}
+              </li>
+            ))}
           </ul>
         )}
-      </Panel>
+      </Sheet>
     </div>
-  );
-}
-
-function PeopleView({
-  api,
-  bookId,
-  onError,
-}: {
-  api: SodamApi;
-  bookId: string;
-  onError: (m: string | null) => void;
-}) {
-  const [q, setQ] = useState('');
-  const [rows, setRows] = useState<Array<SodamPerson & { history: SodamEntry[] }>>([]);
-
-  return (
-    <Panel title="Tìm người" description="Lịch sử nhận / đi xuyên các đám.">
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Input
-          className="min-w-0 flex-1"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Nhập tên…"
-        />
-        <Btn
-          onClick={() =>
-            void api
-              .searchPeople(bookId, q)
-              .then(setRows)
-              .catch((e: Error) => onError(e.message))
-          }
-        >
-          Tìm
-        </Btn>
-      </div>
-      <ul className="mt-4 space-y-4">
-        {rows.map((p) => (
-          <li key={p.id} className="overflow-hidden rounded-2xl border border-line">
-            <div className="flex items-center gap-3 border-b border-line bg-paper/60 px-3.5 py-3">
-              <PersonAvatar name={p.displayName} size="lg" />
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold text-ink">{p.displayName}</p>
-                <p className="text-xs text-muted">{p.note || 'Không ghi chú'}</p>
-              </div>
-            </div>
-            {p.history.length === 0 ? (
-              <p className="px-3.5 py-3 text-sm text-muted">Chưa có lịch sử.</p>
-            ) : (
-              <ul className="divide-y divide-line">
-                {p.history.slice(0, 5).map((h) => (
-                  <li
-                    key={h.id}
-                    className="flex min-h-12 items-center justify-between gap-3 px-3.5 py-2.5 text-sm"
-                  >
-                    <span className="min-w-0 truncate text-muted">
-                      {h.source}
-                      <span className="mx-1.5 text-line">·</span>
-                      {new Date(h.createdAt).toLocaleDateString('vi-VN')}
-                    </span>
-                    <span className="shrink-0 rounded-full border border-line bg-paper px-2.5 py-1 font-mono text-xs font-semibold tabular-nums text-ink">
-                      {money(h.amountVnd)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </li>
-        ))}
-      </ul>
-    </Panel>
   );
 }

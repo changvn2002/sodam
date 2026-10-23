@@ -93,6 +93,12 @@ export function createHttpSodamApi(): SodamApi {
         `${base}/books/${bookId}/relations`,
         bookInit(bookId, { method: 'POST', body: JSON.stringify(input) }),
       ),
+    deleteRelation: async (bookId, relationId) => {
+      await api(
+        `${base}/books/${bookId}/relations/${relationId}`,
+        bookInit(bookId, { method: 'DELETE' }),
+      );
+    },
     tree: (bookId) => api(`${base}/books/${bookId}/tree`, bookInit(bookId)),
     listReturns: (bookId, status?: SodamReturnStatus) =>
       api(`${base}/books/${bookId}/returns${status ? `?status=${status}` : ''}`, bookInit(bookId)),

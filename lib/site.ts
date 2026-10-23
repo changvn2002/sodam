@@ -8,6 +8,6 @@ export function siteUrl() {
 }
 
 export const SITE_NAME = 'Sổ Đám';
-export const SITE_TAGLINE = 'Nhận lễ, trả lễ, với ai — nói hoặc chụp ảnh như sổ dưới quê.';
+export const SITE_TAGLINE = 'Nhận lễ, trả lễ, với ai — ghi bằng lời nói, như sổ dưới quê.';
 export const SITE_DESCRIPTION =
-  'Sổ Đám — sổ ghi tiền mừng cưới, đám hỏi, đám tang, giỗ, mừng thọ và các dịp lễ của người Việt. Ghi lễ bằng giọng nói hoặc chụp ảnh sổ tay, theo dõi nghĩa vụ trả lễ, đồng sổ gia đình bằng mã mời và xem cây họ.';
+  'Sổ Đám là sổ ghi tiền mừng cưới, đám giỗ, đám tang, mừng thọ và các dịp lễ Việt. Ghi lễ bằng giọng nói, theo dõi trả lễ, dùng chung cả nhà bằng mã mời, xem cây họ.';

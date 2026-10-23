@@ -6,10 +6,18 @@ import type {
   SodamRelationType,
   SodamReturnStatus,
 } from '@prisma/client';
+import { timingSafeEqual } from 'node:crypto';
 import { prisma } from './prisma';
-import { badRequest, notFound } from './errors';
+import { HttpError, badRequest, notFound } from './errors';
 import { INT4_MAX, INT4_MAX_MESSAGE } from './http';
-import { generateInviteCode, inviteCodesMatch, normalizeInviteCode } from './invite-code';
+import {
+  JOIN_THROTTLE_LIMIT,
+  JOIN_THROTTLE_WINDOW_MS,
+  generateInviteCode,
+  hashInviteCode,
+  inviteCodesMatch,
+  normalizeInviteCode,
+} from './invite-code';
 import { sodamEventKindLabelVi } from './sodam-event-kinds';
 
 /**
@@ -42,15 +50,53 @@ function assertAmountVnd(amountVnd: number) {
   }
 }
 
+/**
+ * SEC-08: verify a presented code against a stored SHA-256 hex hash in
+ * constant time. Buffers are rebuilt from hex so timingSafeEqual compares
+ * the raw digests, never the (length-leaking) hex strings.
+ */
+function inviteHashMatches(providedCode: string, storedHash: string): boolean {
+  const a = Buffer.from(hashInviteCode(providedCode), 'hex');
+  const b = Buffer.from(storedHash, 'hex');
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/**
+ * Opportunistic legacy upgrade: a book that still stores its code in
+ * plaintext gets the hash written and the plaintext wiped the first time
+ * the code is successfully presented. Failures here must never break the
+ * access that was just granted, hence the swallowed errors at call sites.
+ */
+async function upgradeBookToHashedCode(bookId: string, normalizedCode: string) {
+  await prisma.sodamBook.update({
+    where: { id: bookId },
+    data: { inviteCodeHash: hashInviteCode(normalizedCode), inviteCode: null },
+  });
+}
+
 export async function requireBookAccess(bookId: string, code: string) {
   const book = await prisma.sodamBook.findUnique({
     where: { id: bookId },
-    select: { id: true, inviteCode: true },
+    select: { id: true, inviteCode: true, inviteCodeHash: true },
   });
-  if (!book || !inviteCodesMatch(code, book.inviteCode)) {
-    throw notFound('Book not found');
+  if (!book) throw notFound('Book not found');
+  const normalized = normalizeInviteCode(code);
+  if (book.inviteCodeHash) {
+    if (!inviteHashMatches(normalized, book.inviteCodeHash)) {
+      throw notFound('Book not found');
+    }
+    // Back-compat: callers/consumers see the verified code, never null.
+    return { ...book, inviteCode: normalized };
   }
-  return book;
+  if (book.inviteCode && inviteCodesMatch(code, book.inviteCode)) {
+    try {
+      await upgradeBookToHashedCode(book.id, normalized);
+    } catch {
+      // Upgrade is best-effort — a failed write must not revoke access.
+    }
+    return { ...book, inviteCode: normalized };
+  }
+  throw notFound('Book not found');
 }
 
 /**
@@ -60,36 +106,148 @@ export async function requireBookAccess(bookId: string, code: string) {
 export async function listBooksByCodes(codes: string[]) {
   const normalized = [...new Set(codes.map(normalizeInviteCode).filter(Boolean))].slice(0, 50);
   if (normalized.length === 0) return [];
-  return prisma.sodamBook.findMany({
-    where: { inviteCode: { in: normalized } },
-    orderBy: { updatedAt: 'desc' },
-    take: 50,
-  });
+  const hashes = normalized.map((c) => hashInviteCode(c));
+  const [byHash, legacy] = await Promise.all([
+    prisma.sodamBook.findMany({
+      where: { inviteCodeHash: { in: hashes } },
+      orderBy: { updatedAt: 'desc' },
+      take: 50,
+    }),
+    prisma.sodamBook.findMany({
+      where: { inviteCode: { in: normalized } },
+      orderBy: { updatedAt: 'desc' },
+      take: 50,
+    }),
+  ]);
+  const seen = new Set<string>();
+  const out: Array<(typeof byHash)[number] & { inviteCode: string }> = [];
+  for (const book of byHash) {
+    if (seen.has(book.id)) continue;
+    seen.add(book.id);
+    const matched = normalized.find((c) => hashInviteCode(c) === book.inviteCodeHash);
+    out.push({ ...book, inviteCode: matched ?? '' });
+  }
+  for (const book of legacy) {
+    if (seen.has(book.id)) continue;
+    seen.add(book.id);
+    const matched =
+      normalized.find((c) => c === book.inviteCode) ?? normalizeInviteCode(book.inviteCode);
+    // Opportunistic upgrade for every legacy book this device can open.
+    try {
+      await upgradeBookToHashedCode(book.id, matched);
+    } catch {
+      // Best-effort only — listing must not fail on a failed upgrade write.
+    }
+    out.push({ ...book, inviteCode: matched, inviteCodeHash: hashInviteCode(matched) });
+  }
+  return out
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, 50);
 }
 
 export async function createBook(name: string) {
   // Codes are random; retry a few times on the (astronomically unlikely)
-  // unique collision instead of failing the create.
+  // unique collision instead of failing the create. SEC-08: collisions are
+  // checked against the HASH and only the hash is stored — the plaintext
+  // exists solely in this response, which the client saves on its device.
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const code = generateInviteCode();
-    const existing = await prisma.sodamBook.findUnique({ where: { inviteCode: code } });
+    const codeHash = hashInviteCode(code);
+    const existing = await prisma.sodamBook.findUnique({
+      where: { inviteCodeHash: codeHash },
+    });
     if (existing) continue;
-    return prisma.sodamBook.create({ data: { name: name.trim(), inviteCode: code } });
+    const created = await prisma.sodamBook.create({
+      data: { name: name.trim(), inviteCode: null, inviteCodeHash: codeHash },
+    });
+    return { ...created, inviteCode: code };
   }
   throw new Error('Could not allocate a unique invite code');
 }
 
-export async function joinBook(code: string) {
-  const book = await prisma.sodamBook.findUnique({
-    where: { inviteCode: normalizeInviteCode(code) },
+// --- SEC-08 join throttling -------------------------------------------------
+
+async function readJoinThrottle(scope: string, key: string) {
+  const row = await prisma.sodamJoinThrottle.findFirst({ where: { scope, key } });
+  if (!row) return null;
+  const expired = Date.now() - new Date(row.windowStart).getTime() >= JOIN_THROTTLE_WINDOW_MS;
+  return expired ? null : row;
+}
+
+async function assertJoinNotThrottled(ip: string, codeHash: string) {
+  const rows = await Promise.all([
+    ip ? readJoinThrottle('ip', ip) : Promise.resolve(null),
+    readJoinThrottle('code', codeHash),
+  ]);
+  if (rows.some((r) => r && r.count >= JOIN_THROTTLE_LIMIT)) {
+    throw new HttpError(429, 'Bạn đã thử mở sổ quá nhiều lần. Đợi khoảng 15 phút rồi thử lại.');
+  }
+}
+
+async function recordJoinFailure(scope: string, key: string) {
+  const existing = await prisma.sodamJoinThrottle.findFirst({ where: { scope, key } });
+  const now = new Date();
+  if (!existing) {
+    await prisma.sodamJoinThrottle.create({
+      data: { scope, key, count: 1, windowStart: now },
+    });
+    return;
+  }
+  const expired =
+    now.getTime() - new Date(existing.windowStart).getTime() >= JOIN_THROTTLE_WINDOW_MS;
+  await prisma.sodamJoinThrottle.update({
+    where: { id: existing.id },
+    data: expired ? { count: 1, windowStart: now } : { count: existing.count + 1 },
   });
-  if (!book) throw notFound('Invite code not found');
-  return book;
+}
+
+async function clearJoinFailures(ip: string, codeHash: string) {
+  await Promise.all([
+    ip
+      ? prisma.sodamJoinThrottle.deleteMany({ where: { scope: 'ip', key: ip } })
+      : Promise.resolve(null),
+    prisma.sodamJoinThrottle.deleteMany({ where: { scope: 'code', key: codeHash } }),
+  ]);
+}
+
+export async function joinBook(code: string, ip = '') {
+  const normalized = normalizeInviteCode(code);
+  const codeHash = hashInviteCode(normalized);
+  // Throttle BEFORE any lookup: a blocked caller learns nothing, not even
+  // whether the code they are trying right now happens to be valid.
+  await assertJoinNotThrottled(ip, codeHash);
+
+  const byHash = await prisma.sodamBook.findUnique({
+    where: { inviteCodeHash: codeHash },
+  });
+  if (byHash && inviteHashMatches(normalized, byHash.inviteCodeHash ?? '')) {
+    await clearJoinFailures(ip, codeHash);
+    return { ...byHash, inviteCode: normalized };
+  }
+
+  const legacy = await prisma.sodamBook.findUnique({
+    where: { inviteCode: normalized },
+  });
+  if (legacy?.inviteCode && inviteCodesMatch(normalized, legacy.inviteCode)) {
+    const upgraded = await prisma.sodamBook.update({
+      where: { id: legacy.id },
+      data: { inviteCodeHash: codeHash, inviteCode: null },
+    });
+    await clearJoinFailures(ip, codeHash);
+    return { ...upgraded, inviteCode: normalized };
+  }
+
+  if (ip) await recordJoinFailure('ip', ip);
+  await recordJoinFailure('code', codeHash);
+  throw notFound('Invite code not found');
 }
 
 export async function dashboard(bookId: string, code: string) {
   await requireBookAccess(bookId, code);
-  const book = await prisma.sodamBook.findUniqueOrThrow({ where: { id: bookId } });
+  const rawBook = await prisma.sodamBook.findUniqueOrThrow({ where: { id: bookId } });
+  // SEC-08: v2 books store inviteCode = null — the payload must still carry
+  // the verified code the client presented, never null.
+  const book = rawBook.inviteCode ? rawBook : { ...rawBook, inviteCode: normalizeInviteCode(code) };
   const [openEvent, openReturns, recentEvents, peopleCount, hostedAgg, attendedAgg, doneReturns] =
     await Promise.all([
       prisma.sodamEvent.findFirst({
@@ -437,6 +595,28 @@ export async function listRelations(bookId: string, code: string) {
   });
 }
 
+/**
+ * Xoá một quan hệ khỏi cây họ (bổ sung ở vòng tích hợp đợt redesign —
+ * LAYOUT-SPEC §6 yêu cầu mỗi quan hệ có thao tác xoá kèm xác nhận ở UI).
+ * Quan hệ chỉ bị xoá khi người bắt đầu của nó thuộc đúng sổ đang mở:
+ * quan hệ của sổ khác trả 404 như không tồn tại, nhất quán với phần còn lại.
+ */
+export async function deleteRelation(bookId: string, relationId: string, code: string) {
+  await requireBookAccess(bookId, code);
+  const people = await prisma.sodamPerson.findMany({
+    where: { bookId },
+    select: { id: true },
+    take: 500,
+  });
+  const ids = people.map((p) => p.id);
+  const rel = await prisma.sodamPersonRelation.findFirst({
+    where: { id: relationId, fromPersonId: { in: ids } },
+  });
+  if (!rel) throw notFound('Relation not found');
+  await prisma.sodamPersonRelation.delete({ where: { id: relationId } });
+  return { ok: true as const };
+}
+
 export async function createRelation(
   bookId: string,
   code: string,
@@ -491,7 +671,7 @@ export async function markReturn(
   bookId: string,
   returnId: string,
   code: string,
-  input: { status: 'DONE' | 'SKIPPED'; amountVnd?: number },
+  input: { status: 'DONE' | 'SKIPPED' | 'OPEN'; amountVnd?: number },
 ) {
   await requireBookAccess(bookId, code);
   const item = await prisma.sodamReturnItem.findFirst({
@@ -499,7 +679,8 @@ export async function markReturn(
     include: { person: true },
   });
   if (!item) throw notFound('Return item not found');
-  if (input.amountVnd != null) assertAmountVnd(input.amountVnd);
+  // Reopening (OPEN) clears the settlement entirely and ignores amountVnd.
+  if (input.status !== 'OPEN' && input.amountVnd != null) assertAmountVnd(input.amountVnd);
   const received = item.suggestedAmountVnd ?? 0;
   const paid =
     input.status === 'DONE' ? Math.max(0, Math.round(input.amountVnd ?? received)) : null;

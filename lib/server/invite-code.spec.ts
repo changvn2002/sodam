@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  INVITE_CODE_ALPHABET,
   INVITE_CODE_LENGTH,
   generateInviteCode,
+  hashInviteCode,
   inviteCodesMatch,
   normalizeInviteCode,
 } from './invite-code';
 
 describe('invite code (no-login book access)', () => {
-  it('generates 12-char codes from the unambiguous alphabet', () => {
+  it('generates 16-char codes from the unambiguous alphabet', () => {
     for (let i = 0; i < 200; i += 1) {
       const code = generateInviteCode();
       expect(code).toHaveLength(INVITE_CODE_LENGTH);
@@ -16,7 +18,15 @@ describe('invite code (no-login book access)', () => {
     }
   });
 
-  it('does not repeat codes in practice (60-bit space)', () => {
+  it('SEC-08 entropy: length × log2(real alphabet size) ≈ 79.27 bits (≥ 64)', () => {
+    expect(INVITE_CODE_ALPHABET).toHaveLength(31);
+    expect(INVITE_CODE_LENGTH).toBe(16);
+    const bits = INVITE_CODE_LENGTH * Math.log2(INVITE_CODE_ALPHABET.length);
+    expect(bits).toBeGreaterThanOrEqual(64);
+    expect(bits).toBeCloseTo(79.27, 1);
+  });
+
+  it('does not repeat codes in practice (79-bit space)', () => {
     const seen = new Set(Array.from({ length: 2000 }, () => generateInviteCode()));
     expect(seen.size).toBe(2000);
   });
@@ -25,6 +35,20 @@ describe('invite code (no-login book access)', () => {
     expect(normalizeInviteCode('  ab3k9z  ')).toBe('AB3K9Z');
     expect(normalizeInviteCode(undefined)).toBe('');
     expect(normalizeInviteCode(42)).toBe('');
+  });
+
+  it('hashInviteCode is a stable sha256 hex of the normalized code', () => {
+    const code = generateInviteCode();
+    const hash = hashInviteCode(code);
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
+    // Stable across calls and insensitive to case / stray spaces.
+    expect(hashInviteCode(code)).toBe(hash);
+    expect(hashInviteCode(code.toLowerCase())).toBe(hash);
+    expect(hashInviteCode(` ${code} `)).toBe(hash);
+    // Different codes hash differently; the hash never equals the code.
+    expect(hashInviteCode(generateInviteCode())).not.toBe(hash);
+    expect(hash).not.toContain(code);
+    expect(hashInviteCode(undefined)).toBe(hashInviteCode(''));
   });
 
   it('matches the right code regardless of typed case; rejects wrong/empty', () => {

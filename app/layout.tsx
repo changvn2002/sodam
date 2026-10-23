@@ -1,32 +1,23 @@
 import type { Metadata, Viewport } from 'next';
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, siteUrl } from '@/lib/site';
+import { SwRegister } from '@/components/sodam/ui/sw-register';
 import './globals.css';
 
 /*
- * Fonts are self-hosted via Fontsource — the same families, weights and
- * subsets the host loaded through next/font/google (Be Vietnam Pro latin +
- * vietnamese 400–700, Outfit latin 500–700, Playfair Display latin +
- * vietnamese 500–700), but bundled with the app so production builds never
- * depend on reaching Google Fonts. The CSS variables (--font-sans,
- * --font-display, --font-serif-vn) are defined in globals.css.
- *
- * Serif có đủ dấu tiếng Việt cho tiêu đề Sổ Đám. Tuyệt đối không dùng
- * Georgia/Times hệ thống: thiếu glyph tiền tố hợp, dấu tiếng Việt bị
- * chồng/lệch trên Windows.
+ * Fonts are self-hosted via Fontsource: IBM Plex Sans (UI) + IBM Plex Mono
+ * (mọi số tiền, mã mời) — subsets latin + vietnamese, glyph U+1EA0–U+1EF9
+ * verified complete for both families (DESIGN-LANGUAGE §4). No other
+ * families: one sans for text, one mono for numbers.
  */
-import '@fontsource/be-vietnam-pro/400.css';
-import '@fontsource/be-vietnam-pro/500.css';
-import '@fontsource/be-vietnam-pro/600.css';
-import '@fontsource/be-vietnam-pro/700.css';
-import '@fontsource/outfit/500.css';
-import '@fontsource/outfit/600.css';
-import '@fontsource/outfit/700.css';
-import '@fontsource/playfair-display/500.css';
-import '@fontsource/playfair-display/600.css';
-import '@fontsource/playfair-display/700.css';
+import '@fontsource/ibm-plex-sans/400.css';
+import '@fontsource/ibm-plex-sans/500.css';
+import '@fontsource/ibm-plex-sans/600.css';
+import '@fontsource/ibm-plex-sans/700.css';
+import '@fontsource/ibm-plex-mono/500.css';
+import '@fontsource/ibm-plex-mono/600.css';
 
 export const viewport: Viewport = {
-  themeColor: '#07332b',
+  themeColor: '#161A3D',
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
@@ -62,7 +53,7 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     images: [
       {
-        url: '/og.png',
+        url: '/og.jpg',
         width: 1200,
         height: 630,
         alt: 'Sổ Đám — sổ ghi lễ cho đám cưới, đám giỗ và các dịp lễ Việt Nam',
@@ -73,7 +64,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: `${SITE_NAME} — ${SITE_TAGLINE}`,
     description: SITE_DESCRIPTION,
-    images: ['/og.png'],
+    images: ['/og.jpg'],
   },
   robots: {
     index: true,
@@ -100,7 +91,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi">
-      <body className="font-sans antialiased">{children}</body>
+      <body className="font-sans antialiased">
+        {children}
+        <SwRegister />
+      </body>
     </html>
   );
 }

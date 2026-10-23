@@ -62,10 +62,14 @@ async function dispatch(req: Request, segments: string[]) {
     return sodam.listBooksByCodes(codes);
   }
 
-  // /books/join — open a book by its invite code
+  // /books/join — open a book by its invite code (SEC-08: throttled per IP)
   if (segments.length === 2 && bookId === 'join' && method === 'POST') {
     const body = await readJson(req);
-    return sodam.joinBook(reqString(body, 'inviteCode', 3, 64));
+    const ip =
+      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      req.headers.get('x-real-ip') ||
+      '';
+    return sodam.joinBook(reqString(body, 'inviteCode', 3, 64), ip);
   }
 
   // Every route below is scoped to one book: the invite code is the key.
@@ -159,7 +163,7 @@ async function dispatch(req: Request, segments: string[]) {
     return sodam.searchPeople(bookId, code, q);
   }
 
-  // /books/:bookId/relations
+  // /books/:bookId/relations[/:relationId]
   if (segments.length === 3 && sub === 'relations') {
     if (method === 'GET') return sodam.listRelations(bookId, code);
     if (method === 'POST') {
@@ -170,6 +174,9 @@ async function dispatch(req: Request, segments: string[]) {
         type: reqEnum<SodamRelationType>(body, 'type', RELATION_TYPES),
       });
     }
+  }
+  if (segments.length === 4 && sub === 'relations' && method === 'DELETE') {
+    return sodam.deleteRelation(bookId, third, code);
   }
 
   // /books/:bookId/tree
@@ -188,7 +195,7 @@ async function dispatch(req: Request, segments: string[]) {
   if (segments.length === 4 && sub === 'returns' && method === 'PATCH') {
     const body = await readJson(req);
     return sodam.markReturn(bookId, third, code, {
-      status: reqEnum(body, 'status', ['DONE', 'SKIPPED'] as const),
+      status: reqEnum(body, 'status', ['DONE', 'SKIPPED', 'OPEN'] as const),
       amountVnd: optIntMin0(body, 'amountVnd'),
     });
   }

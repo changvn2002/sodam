@@ -200,12 +200,13 @@ export type SodamApi = {
     bookId: string,
     input: { fromPersonId: string; toPersonId: string; type: SodamRelationType },
   ) => Promise<SodamRelation>;
+  deleteRelation: (bookId: string, relationId: string) => Promise<void>;
   tree: (bookId: string) => Promise<{ people: SodamPerson[]; relations: SodamRelation[] }>;
   listReturns: (bookId: string, status?: SodamReturnStatus) => Promise<SodamReturnItem[]>;
   markReturn: (
     bookId: string,
     returnId: string,
-    input: { status: 'DONE' | 'SKIPPED'; amountVnd?: number },
+    input: { status: 'OPEN' | 'DONE' | 'SKIPPED'; amountVnd?: number },
   ) => Promise<SodamReturnItem>;
   exportCsv: (bookId: string) => Promise<string>;
   importCsv: (bookId: string, csv: string) => Promise<{ imported: number }>;
