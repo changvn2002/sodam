@@ -9,6 +9,21 @@ phát hành gắn tag `vX.Y.Z` lên đúng commit đang chạy production và gh
 một dòng vào bảng cặp ở cuối file này: phiên bản → commit SHA → ngày
 deploy. "Về bản vX.Y.Z" khi rollback nghĩa là về commit của tag đó.
 
+## [1.1.1] — hotfix bảo mật dependency (SEC-10)
+
+Phát hành ngày 2026-10-24, tag v1.1.1 — xem bảng cặp ở cuối file.
+Cổng audit SEC-10 vừa được siết chặn thật ở v1.1.0 đã bắt được ngay
+trên CI của chính v1.1.0:
+
+- **next 16.3.6 → 16.4.2:** vá 2 lỗ hổng CRITICAL — RCE không cần
+  xác thực ở Image Optimization API khi dùng SVG
+  (GHSA-2464-fhr4-w9xw) và RCE ở `use cache` với typed arrays
+  (GHSA-673q-mjm6-r5xr) — cùng 1 HIGH SSRF ở Image Optimization và
+  1 HIGH DoS ở App Router/Server Actions.
+- **prisma / @prisma/client → 6.19.3** và **override deepmerge-ts
+  ^8.0.0** (bản 7.x qua @prisma/config dính HIGH stack exhaustion
+  khi merge đồ thị đối tượng đệ quy).
+
 ## [1.1.0] — đợt sửa sau Panel #02/#03 + hồ sơ chấm vòng 2–3
 
 Phiên bản này gồm hai đợt: đợt hợp nhất `bfdd463` (đã chạy production —
@@ -132,5 +147,6 @@ tag v1.1.0 — xem bảng cặp ở cuối file.
 
 | Phiên bản | Commit | Ngày deploy | Ghi chú |
 |---|---|---|---|
+| 1.1.1 | — | 2026-10-24 | Hotfix SEC-10 (next 16.4.2 + deepmerge-ts ^8); dòng này điền SHA ở commit kế tiếp |
 | 1.1.0 | `cc1c42b` | 2026-10-24 | Tag v1.1.0 gắn tại commit kế tiếp (chỉ bổ sung dòng này) |
 | 1.0.0 | `bddb9c4` | 2026-10-23 | Đã gắn tag v1.0.0 |
