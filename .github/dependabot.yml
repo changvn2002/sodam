@@ -1,0 +1,23 @@
+# Dependabot — cập nhật dependency theo tuần, gộp theo hệ sinh thái.
+# SEC-10: lỗ hổng dependency phải lộ diện thành PR thay vì nằm im trong
+# lockfile. Mọi PR của Dependabot vẫn phải qua cổng CI như người thường.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      production:
+        dependency-type: production
+      development:
+        dependency-type: development
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3

@@ -645,3 +645,93 @@ describe('relations — delete (integration add-on, LAYOUT-SPEC §6)', () => {
     expect(((await list.json()) as unknown[]).length).toBe(1);
   });
 });
+
+describe('DATA-04(ii) — rotate invite code + SEC-12 no-store', () => {
+  it('rotate: old code dies immediately, new code works, row stores hash only', async () => {
+    const created = await POST(req('POST', ['books'], { name: 'Sổ đổi mã' }), ctx(['books']));
+    const book = (await created.json()) as { id: string; inviteCode: string };
+    const oldCode = book.inviteCode;
+
+    const rotated = await POST(
+      req('POST', ['books', book.id, 'rotate-code'], undefined, { 'x-book-code': oldCode }),
+      ctx(['books', book.id, 'rotate-code']),
+    );
+    expect(rotated.status).toBe(200);
+    const after = (await rotated.json()) as { id: string; inviteCode: string };
+    expect(after.id).toBe(book.id);
+    expect(after.inviteCode).toHaveLength(16);
+    expect(after.inviteCode).not.toBe(oldCode);
+
+    // Old code is dead everywhere: join AND book-scoped access.
+    const joinOld = await POST(
+      req('POST', ['books', 'join'], { inviteCode: oldCode }),
+      ctx(['books', 'join']),
+    );
+    expect(joinOld.status).toBe(404);
+    const dashOld = await GET(
+      req('GET', ['books', book.id, 'dashboard'], undefined, { 'x-book-code': oldCode }),
+      ctx(['books', book.id, 'dashboard']),
+    );
+    expect(dashOld.status).toBe(404);
+
+    // New code opens the book.
+    const joinNew = await POST(
+      req('POST', ['books', 'join'], { inviteCode: after.inviteCode }),
+      ctx(['books', 'join']),
+    );
+    expect(joinNew.status).toBe(200);
+
+    // /books/mine with the new code resolves the book and shows the stored
+    // row carries a hash of the NEW code and no plaintext at all.
+    const mine = await POST(
+      req('POST', ['books', 'mine'], { codes: [after.inviteCode] }),
+      ctx(['books', 'mine']),
+    );
+    const list = (await mine.json()) as Array<{
+      id: string;
+      inviteCode: string;
+      inviteCodeHash: string | null;
+    }>;
+    const row = list.find((b) => b.id === book.id);
+    expect(row).toBeDefined();
+    expect(row!.inviteCodeHash).toBe(hashInviteCode(after.inviteCode));
+  });
+
+  it('rotate with a wrong code → 404 and the current code keeps working', async () => {
+    const created = await POST(req('POST', ['books'], { name: 'Sổ giữ mã' }), ctx(['books']));
+    const book = (await created.json()) as { id: string; inviteCode: string };
+
+    const attempt = await POST(
+      req('POST', ['books', book.id, 'rotate-code'], undefined, {
+        'x-book-code': 'MA-SAI-HOAN-TOAN-1',
+      }),
+      ctx(['books', book.id, 'rotate-code']),
+    );
+    expect(attempt.status).toBe(404);
+
+    const dash = await GET(
+      req('GET', ['books', book.id, 'dashboard'], undefined, { 'x-book-code': book.inviteCode }),
+      ctx(['books', book.id, 'dashboard']),
+    );
+    expect(dash.status).toBe(200);
+  });
+
+  it('SEC-12(12.3): data routes and error responses carry Cache-Control: no-store', async () => {
+    const created = await POST(req('POST', ['books'], { name: 'Sổ no-store' }), ctx(['books']));
+    const book = (await created.json()) as { id: string; inviteCode: string };
+    expect(created.headers.get('cache-control')).toBe('no-store');
+
+    const dash = await GET(
+      req('GET', ['books', book.id, 'dashboard'], undefined, { 'x-book-code': book.inviteCode }),
+      ctx(['books', book.id, 'dashboard']),
+    );
+    expect(dash.headers.get('cache-control')).toBe('no-store');
+
+    const denied = await GET(
+      req('GET', ['books', book.id, 'dashboard'], undefined, { 'x-book-code': 'SAI' }),
+      ctx(['books', book.id, 'dashboard']),
+    );
+    expect(denied.status).toBe(404);
+    expect(denied.headers.get('cache-control')).toBe('no-store');
+  });
+});

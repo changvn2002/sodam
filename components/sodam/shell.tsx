@@ -182,8 +182,8 @@ export function WorkspaceShell({
           </button>
         </nav>
 
-        <p className={railSectionLabel}>Mặt</p>
-        <nav aria-label="Mặt trong sổ" className="space-y-0.5 px-2">
+        <p className={railSectionLabel}>Xem sổ</p>
+        <nav aria-label="Các mục xem sổ" className="space-y-0.5 px-2">
           {FACE_ORDER.map((f) => {
             const active = face === f || (f === 'overview' && face === 'event');
             return (
@@ -282,7 +282,7 @@ export function WorkspaceShell({
             </button>
           </div>
 
-          <nav aria-label="Mặt trong sổ" className="flex px-2">
+          <nav aria-label="Các mục xem sổ" className="flex px-2">
             {FACE_ORDER.map((f) => {
               const active = face === f || (f === 'overview' && face === 'event');
               return (
@@ -298,7 +298,7 @@ export function WorkspaceShell({
                 >
                   {FACE_LABELS[f]}
                   {f === 'returns' && returnsBadge ? (
-                    <span className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-gold-soft px-1 font-mono text-[11px] font-semibold text-gold-ink tabular-nums">
+                    <span className="inline-flex min-h-6 min-w-6 items-center justify-center rounded-full bg-gold-soft px-1 font-mono text-xs font-semibold text-gold-ink tabular-nums">
                       {returnsBadge}
                     </span>
                   ) : null}
@@ -397,7 +397,7 @@ export function CommandBar({
           onChange={(e) => {
             if (e.target.value) onSelectEvent(e.target.value);
           }}
-          className="min-h-11 max-w-44 truncate rounded-[10px] border border-line-strong bg-card px-2.5 text-sm text-ink outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
+          className="min-h-11 max-w-44 truncate rounded-[10px] border border-line-strong bg-card px-2.5 text-sm text-ink outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
         >
           <option value="" disabled>
             Chọn đám
@@ -425,7 +425,7 @@ export function CommandBar({
             onChange={(e) => onSearchChange?.(e.target.value)}
             placeholder={searchPlaceholder ?? 'Tìm…'}
             aria-label={searchLabel ?? 'Tìm trong bảng'}
-            className="min-h-11 w-full rounded-[10px] border border-line-strong bg-card pr-3 pl-9 text-sm text-ink outline-none placeholder:text-muted focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
+            className="min-h-11 w-full rounded-[10px] border border-line-strong bg-card pr-3 pl-9 text-sm text-ink outline-none placeholder:text-muted focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
           />
         </div>
       ) : null}
@@ -476,9 +476,14 @@ export function TotalsStrip({
           </p>
         ))}
       </div>
-      <p className="mt-0.5 truncate font-mono text-xs tabular-nums text-muted">
-        Đã nhận {received} − đã đi {given} = còn giữ {kept}
-        {overGiven ? ` · đi nhiều hơn ${overGiven}` : ''}
+      {/* Panel #02 mục 5: KHÔNG truncate — từng vế là một khối nowrap, dòng
+          công thức tự xuống dòng giữa các vế để con số kết luận "còn giữ"
+          luôn hiện trọn trên mobile 390px. */}
+      <p className="mt-0.5 flex flex-wrap gap-x-2 font-mono text-xs tabular-nums text-muted">
+        <span className="whitespace-nowrap">Đã nhận {received}</span>
+        <span className="whitespace-nowrap">− đã đi {given}</span>
+        <span className="whitespace-nowrap">= còn giữ {kept}</span>
+        {overGiven ? <span className="whitespace-nowrap">· đi nhiều hơn {overGiven}</span> : null}
       </p>
     </section>
   );
@@ -636,9 +641,9 @@ export function StatusPill({
   }
   if (status === 'OVER') {
     return (
-      <span className="inline-flex min-h-7 items-center gap-1 rounded-full bg-indigo-50 px-2.5 text-xs font-semibold text-lacquer">
+      <span className="inline-flex min-h-7 items-center gap-1 rounded-full bg-indigo-50 px-2.5 text-xs font-semibold text-gold-ink">
         <TriangleAlert className="size-3.5" aria-hidden />
-        {label ?? 'Quá tay'}
+        {label ?? 'Trả dư'}
       </span>
     );
   }
@@ -711,7 +716,14 @@ export function Sheet({
   );
 }
 
-/** Trạng thái trống chuẩn: illustration sổ trống + 1 câu + 1 CTA. */
+/**
+ * Trạng thái trống chuẩn: minh hoạ sổ mở vẽ tay + 1 câu + 1 CTA.
+ *
+ * Panel #02 mục 7: ảnh raster cũ (sodam-empty.webp) dán nguyên khối nền xám
+ * #f6f6f6 lệch tông với mọi canvas (paper #f5f5f7 / card trắng). Nay vẽ SVG
+ * inline ngay tại đây — nền trong suốt, nét chàm + điểm vàng thuộc hệ
+ * redesign — nên khớp tông ở mọi bề mặt và không tốn một request nào.
+ */
 export function EmptyLedger({
   title,
   body,
@@ -723,14 +735,37 @@ export function EmptyLedger({
 }) {
   return (
     <div className="flex flex-col items-center px-4 py-6 text-center">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/products/sodam-empty.webp"
-        alt=""
-        width={240}
-        height={160}
+      <svg
+        viewBox="0 0 200 132"
         className="h-auto w-full max-w-[200px]"
-      />
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        {/* Sổ mở hai trang */}
+        <path
+          d="M100 22c-13-8.5-30-11-48-8.5v96c18-2.5 35 0 48 8.5 13-8.5 30-11 48-8.5v-96c-18-2.5-35 0-48 8.5Z"
+          fill="#F0F1F8"
+          stroke="#323C85"
+          strokeWidth="2.5"
+        />
+        <path d="M100 22v96.5" stroke="#323C85" strokeWidth="2.5" />
+        {/* Dòng kẻ chờ ghi — trang trái */}
+        <path d="M64 44h24M64 60h24M64 76h16" stroke="#7E85AB" strokeWidth="2.5" />
+        {/* Dòng kẻ chờ ghi — trang phải */}
+        <path d="M112 44h24M112 60h24M112 76h16" stroke="#7E85AB" strokeWidth="2.5" />
+        {/* Đồng xu vàng chưa ghi khoản nào */}
+        <circle cx="160" cy="98" r="13" fill="#F3E5C3" stroke="#C9A24B" strokeWidth="2.5" />
+        <path d="M160 91v14M155.5 94.5h6.5a3 3 0 0 1 0 6h-5" stroke="#7A5A14" strokeWidth="2.2" />
+        {/* Nét bút chờ */}
+        <path
+          d="M38 108l14-4-4 14-3.5-6.5L38 108Z"
+          fill="#161A3D"
+          stroke="#161A3D"
+          strokeWidth="2"
+        />
+      </svg>
       <p className="mt-4 text-[15px] font-semibold text-ink">{title}</p>
       <p className="mt-1 max-w-sm text-sm leading-relaxed text-muted">{body}</p>
       {action ? <div className="mt-4">{action}</div> : null}
@@ -801,7 +836,7 @@ export function Input(props: React.ComponentProps<'input'>) {
     <input
       {...props}
       className={cn(
-        'min-h-12 w-full rounded-[10px] border border-line-strong bg-card px-3 text-base text-ink outline-none transition-colors placeholder:text-muted focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30',
+        'min-h-12 w-full rounded-[10px] border border-line-strong bg-card px-3 text-base text-ink outline-none transition-colors placeholder:text-muted focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500',
         props.className,
       )}
     />
@@ -813,7 +848,7 @@ export function Select(props: React.ComponentProps<'select'>) {
     <select
       {...props}
       className={cn(
-        'min-h-12 w-full rounded-[10px] border border-line-strong bg-card px-3 text-base text-ink outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30',
+        'min-h-12 w-full rounded-[10px] border border-line-strong bg-card px-3 text-base text-ink outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500',
         props.className,
       )}
     />

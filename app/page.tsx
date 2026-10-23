@@ -1,3 +1,4 @@
+import { headers } from 'next/headers';
 import { SodamApp } from '@/components/sodam/app';
 import { FAQS } from '@/lib/faq';
 import { SITE_DESCRIPTION, SITE_NAME, siteUrl } from '@/lib/site';
@@ -41,11 +42,16 @@ const jsonLd = {
   ],
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  // SEC-02: CSP của middleware chặn mọi script không có nonce — script
+  // JSON-LD viết tay này phải mang đúng nonce của request, nếu không
+  // trình duyệt sẽ chặn và dữ liệu cấu trúc biến mất khỏi trang.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
   return (
     <>
       <script
         type="application/ld+json"
+        nonce={nonce}
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c'),
         }}

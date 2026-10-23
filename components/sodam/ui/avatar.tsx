@@ -39,14 +39,23 @@ import { cn } from '@/lib/utils';
 /* SVG-as-image không fetch metadata, không có <image>/href ngoài.     */
 /* ------------------------------------------------------------------ */
 
-/** Bảng cặp nền/chữ thuộc hệ chàm redesign — hex KHÔNG '#', theo định dạng DiceBear. */
+/**
+ * Bảng cặp nền/chữ thuộc hệ chàm redesign — hex KHÔNG '#', theo định dạng DiceBear.
+ *
+ * Panel #02 / T-02 (2026-10-23): đỏ sơn mài `B3352C` bị PURGE khỏi toàn bộ
+ * lớp identity — palette này không còn bất kỳ tone đỏ nào, và màu của một
+ * người CHỈ suy từ seed của chính người đó (không còn biến thể theo ngữ
+ * cảnh route như tham số excludeLacquer trước đây: cùng một người từng có
+ * 2 fill khác nhau theo trang, và khách tang/giỗ nhận đúng hex sơn mài đã
+ * khai tử trên các bề mặt cấp sổ). Ngữ cảnh tang/giỗ bám theo THỰC THỂ —
+ * avatar người viếng tang phải trang trọng ở mọi bề mặt, kể cả Tổng quan.
+ */
 const AVATAR_TONES = [
   { bg: '161A3D', fg: 'F0F1F8' }, // indigo-950 / indigo-50
   { bg: '1E2456', fg: 'F3E5C3' }, // indigo-900 / gold-soft
   { bg: '323C85', fg: 'F0F1F8' }, // indigo-700 / indigo-50
   { bg: 'F3E5C3', fg: '7A5A14' }, // gold-soft / gold-ink
   { bg: 'F0F1F8', fg: '161A3D' }, // indigo-50 / indigo-950
-  { bg: 'B3352C', fg: 'F5F5F7' }, // lacquer (tiết chế) / paper
 ] as const;
 
 function hashSeed(value: string): number {
@@ -55,12 +64,9 @@ function hashSeed(value: string): number {
   return h;
 }
 
-function toneFromSeed(seed: string, excludeLacquer?: boolean) {
-  if (!excludeLacquer) {
-    return AVATAR_TONES[hashSeed(seed) % AVATAR_TONES.length]!;
-  }
-  const pool = AVATAR_TONES.filter((tone) => tone.bg !== 'B3352C');
-  return pool[hashSeed(seed) % pool.length]!;
+/** Màu avatar = hàm thuần của seed người đó — ổn định ở mọi bề mặt/ngữ cảnh. */
+function toneFromSeed(seed: string) {
+  return AVATAR_TONES[hashSeed(seed) % AVATAR_TONES.length]!;
 }
 
 /**
@@ -89,14 +95,14 @@ const dataUriCache = new Map<string, string>();
  * không mạng. Glyph suy từ `name` (seed của thư viện); cặp màu nền/chữ
  * suy từ `seed` (id ổn định của thực thể) nếu có, mặc định từ `name`.
  */
-export function initialsDataUri(name: string, seed?: string, excludeLacquer?: boolean): string {
+export function initialsDataUri(name: string, seed?: string): string {
   const displayName = name.trim() || 'guest';
   const toneKey = (seed ?? '').trim() || displayName;
-  const cacheKey = `${toneKey}|${displayName}|${excludeLacquer ? 'no-lacquer' : 'all'}`;
+  const cacheKey = `${toneKey}|${displayName}`;
   const cached = dataUriCache.get(cacheKey);
   if (cached) return cached;
 
-  const tone = toneFromSeed(toneKey, excludeLacquer);
+  const tone = toneFromSeed(toneKey);
   const uri = createAvatar(initials, {
     seed: displayName,
     backgroundColor: [tone.bg],
@@ -158,23 +164,17 @@ export function PersonAvatar({
   size = 'md',
   className,
   seed,
-  excludeLacquer,
 }: {
   name: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
   /** Id ổn định của người (tuỳ chọn) — ghim màu nền, không ảnh hưởng chữ cái. */
   seed?: string;
-  /** Khi true, vòng chọn tone bỏ cặp lacquer (ngữ cảnh tang/giỗ). */
-  excludeLacquer?: boolean;
 }) {
   const dim =
     size === 'sm' ? 'size-8' : size === 'lg' ? 'size-12' : size === 'xl' ? 'size-14' : 'size-10';
   const px = size === 'sm' ? 64 : size === 'lg' ? 96 : size === 'xl' ? 112 : 80;
-  const uri = useMemo(
-    () => initialsDataUri(name, seed, excludeLacquer),
-    [name, seed, excludeLacquer],
-  );
+  const uri = useMemo(() => initialsDataUri(name, seed), [name, seed]);
 
   return (
     <span

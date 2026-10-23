@@ -74,13 +74,27 @@ async function upgradeBookToHashedCode(bookId: string, normalizedCode: string) {
   });
 }
 
+/**
+ * SEC-07 (re-grade r2): hash băm "mồi" cho đường sổ-không-tồn-tại. Trước
+ * đây requireBookAccess ném 404 ngay khi không thấy sổ — không chạy phép
+ * hash nào — trong khi đường sổ-thật luôn tốn một SHA-256 + timingSafeEqual,
+ * tạo kênh timing phân biệt "sổ có thật, mã sai" với "sổ không tồn tại".
+ * Nay đường không-tồn-tại cũng chạy đúng một phép so hash với hằng mồi này
+ * trước khi ném cùng một 404, để hai đường cân bằng công việc.
+ */
+const DUMMY_INVITE_CODE_HASH = hashInviteCode('sodam-dummy-code-for-timing-parity');
+
 export async function requireBookAccess(bookId: string, code: string) {
   const book = await prisma.sodamBook.findUnique({
     where: { id: bookId },
     select: { id: true, inviteCode: true, inviteCodeHash: true },
   });
-  if (!book) throw notFound('Book not found');
   const normalized = normalizeInviteCode(code);
+  if (!book) {
+    // Kết quả phép so bị bỏ — chỉ để cân bằng timing với đường sổ thật.
+    inviteHashMatches(normalized, DUMMY_INVITE_CODE_HASH);
+    throw notFound('Book not found');
+  }
   if (book.inviteCodeHash) {
     if (!inviteHashMatches(normalized, book.inviteCodeHash)) {
       throw notFound('Book not found');
@@ -240,6 +254,35 @@ export async function joinBook(code: string, ip = '') {
   if (ip) await recordJoinFailure('ip', ip);
   await recordJoinFailure('code', codeHash);
   throw notFound('Invite code not found');
+}
+
+/**
+ * Đổi mã mời (DATA-04(ii) / SEC-12.5 — re-grade r2): mã mời là credential
+ * duy nhất của sổ, nên khi mã bị lộ (ảnh chụp, link gửi nhầm) chủ sổ phải
+ * thu hồi được. Đổi mã = thay hash trong MỘT update nguyên tử: mã cũ chết
+ * ngay tại thời điểm ghi (không cửa sổ hai mã cùng sống), mã mới chỉ tồn
+ * tại dạng hash trong DB — plaintext chỉ có trong response này, đúng kỷ
+ * luật SEC-08 như lúc tạo sổ. Người gọi phải trình mã hiện tại qua
+ * requireBookAccess — không có mã đúng thì không đổi được (404 như mọi
+ * đường sai mã khác).
+ */
+export async function rotateInviteCode(bookId: string, code: string) {
+  await requireBookAccess(bookId, code);
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const next = generateInviteCode();
+    const nextHash = hashInviteCode(next);
+    const clash = await prisma.sodamBook.findUnique({
+      where: { inviteCodeHash: nextHash },
+      select: { id: true },
+    });
+    if (clash) continue;
+    const updated = await prisma.sodamBook.update({
+      where: { id: bookId },
+      data: { inviteCodeHash: nextHash, inviteCode: null },
+    });
+    return { ...updated, inviteCode: next };
+  }
+  throw new Error('Could not allocate a unique invite code');
 }
 
 export async function dashboard(bookId: string, code: string) {

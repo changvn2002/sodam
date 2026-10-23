@@ -29,7 +29,7 @@ export const FAQS: ReadonlyArray<{ question: string; answer: string }> = [
   {
     question: 'Phần trả lễ được theo dõi như thế nào?',
     answer:
-      'Khi khách mừng ở đám do nhà bạn tổ chức, Sổ Đám tự ghi nhận khoản trả lễ tương ứng. Bạn đánh dấu đã trả hoặc bỏ qua từng khoản, đánh dấu nhầm thì hoàn tác được, và xem khoản nào còn chờ, khoản nào đã đưa quá tay trên bảng tổng kết của sổ.',
+      'Khi khách mừng ở đám do nhà bạn tổ chức, Sổ Đám tự ghi nhận khoản trả lễ tương ứng. Bạn đánh dấu đã trả hoặc bỏ qua từng khoản, đánh dấu nhầm thì hoàn tác được, và xem khoản nào còn chờ, khoản nào đã trả dư trên bảng tổng kết của sổ.',
   },
   {
     question: 'Cả gia đình dùng chung một cuốn sổ được không?',

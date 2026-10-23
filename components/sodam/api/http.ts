@@ -44,6 +44,16 @@ export function createHttpSodamApi(): SodamApi {
       rememberBook(book.id, book.inviteCode);
       return book;
     },
+    rotateInviteCode: async (bookId) => {
+      const book = await api<SodamBook>(
+        `${base}/books/${bookId}/rotate-code`,
+        bookInit(bookId, { method: 'POST', body: '{}' }),
+      );
+      // Sổ đăng ký trên thiết bị này phải trỏ sang mã mới ngay — mã cũ đã
+      // chết ở máy chủ, giữ lại là mọi lần gọi sau đều 404.
+      rememberBook(book.id, book.inviteCode);
+      return book;
+    },
     dashboard: (bookId) => api(`${base}/books/${bookId}/dashboard`, bookInit(bookId)),
     listEvents: (bookId) => api(`${base}/books/${bookId}/events`, bookInit(bookId)),
     createEvent: (bookId, input) =>

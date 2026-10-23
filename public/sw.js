@@ -7,7 +7,7 @@
  * by the IndexedDB outbox in components/sodam/lib/offline.ts.
  */
 
-const CACHE = 'sodam-shell-v2';
+const CACHE = 'sodam-shell-v3';
 
 const PRECACHE_URLS = [
   '/',
@@ -17,7 +17,6 @@ const PRECACHE_URLS = [
   '/icons/icon-512.png',
   '/icons/icon-maskable-512.png',
   '/icons/apple-touch-icon.png',
-  '/products/sodam-empty.webp',
   '/products/brand/sodam-logo.svg',
   '/og.jpg',
 ];

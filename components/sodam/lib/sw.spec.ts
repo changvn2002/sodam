@@ -33,7 +33,6 @@ describe('public/sw.js — static contract', () => {
       '/icons/icon-512.png',
       '/icons/icon-maskable-512.png',
       '/icons/apple-touch-icon.png',
-      '/products/sodam-empty.webp',
       '/products/brand/sodam-logo.svg',
       '/og.jpg',
     ]) {

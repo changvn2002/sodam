@@ -80,6 +80,13 @@ export function createMockSodamApi(): SodamApi {
       if (!book) throw new Error('Không tìm thấy sổ.');
       return { ...book };
     },
+    async rotateInviteCode(bookId) {
+      const book = mustBook(bookId);
+      // Mã cũ chết ngay — join lại bằng mã cũ phải thất bại (đúng server).
+      book.inviteCode = id('inv').slice(-6).toUpperCase();
+      book.updatedAt = now();
+      return { ...book };
+    },
     async dashboard(bookId) {
       const book = mustBook(bookId);
       const events = store.events.filter((e) => e.bookId === bookId);

@@ -149,6 +149,8 @@ export type SodamApi = {
   listBooks: (codes: string[]) => Promise<SodamBook[]>;
   createBook: (name: string) => Promise<SodamBook>;
   joinBook: (inviteCode: string) => Promise<SodamBook>;
+  /** Đổi mã mời: mã cũ chết ngay, trả về sổ kèm mã mới (DATA-04(ii)). */
+  rotateInviteCode: (bookId: string) => Promise<SodamBook>;
   dashboard: (bookId: string) => Promise<SodamDashboard>;
   listEvents: (bookId: string) => Promise<SodamEvent[]>;
   createEvent: (

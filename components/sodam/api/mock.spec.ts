@@ -171,3 +171,18 @@ describe('sodam mock api OF-01 / SD', () => {
     expect(r.amountVnd).toBe(500_000);
   });
 });
+
+describe('mock — rotate invite code (DATA-04(ii))', () => {
+  beforeEach(() => resetSodamMockStore());
+
+  it('new code opens the book, old code is rejected', async () => {
+    const api = createMockSodamApi();
+    const book = await api.createBook('Sổ mock đổi mã');
+    const oldCode = book.inviteCode;
+    const rotated = await api.rotateInviteCode(book.id);
+    expect(rotated.inviteCode).not.toBe(oldCode);
+    const joined = await api.joinBook(rotated.inviteCode);
+    expect(joined.id).toBe(book.id);
+    await expect(api.joinBook(oldCode)).rejects.toThrow();
+  });
+});

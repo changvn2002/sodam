@@ -1,14 +1,25 @@
 import { NextResponse } from 'next/server';
 import { badRequest, HttpError } from './errors';
 
-/** Run a handler and map results/errors to the JSON shape the client expects (`{ message }` on error, like the original NestJS API). */
+/**
+ * Run a handler and map results/errors to the JSON shape the client expects
+ * (`{ message }` on error, like the original NestJS API).
+ *
+ * SEC-12 khoản 12.3 (re-grade r2): MỌI response của API mang
+ * `Cache-Control: no-store` — dữ liệu sổ nằm sau credential (mã mời) không
+ * được phép lưu cache ở bất kỳ tầng nào; bản live trước đó trả
+ * `public, max-age=0, must-revalidate` trên route dashboard.
+ */
 export async function handle(fn: () => Promise<unknown>) {
   try {
     const data = await fn();
-    return NextResponse.json(data ?? null);
+    return NextResponse.json(data ?? null, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err) {
     if (err instanceof HttpError) {
-      return NextResponse.json({ message: err.message }, { status: err.status });
+      return NextResponse.json(
+        { message: err.message },
+        { status: err.status, headers: { 'Cache-Control': 'no-store' } },
+      );
     }
     // Unexpected errors (Prisma/DB/runtime) are logged server-side ONLY.
     // The client gets a generic Vietnamese message — never the raw error,
@@ -18,7 +29,7 @@ export async function handle(fn: () => Promise<unknown>) {
     console.error(err);
     return NextResponse.json(
       { message: 'Đã xảy ra lỗi ở phía máy chủ. Vui lòng thử lại sau.' },
-      { status: 500 },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } },
     );
   }
 }

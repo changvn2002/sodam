@@ -1,0 +1,4 @@
+Contact: https://github.com/changvn2002/sodam/security/advisories/new
+Policy: https://github.com/changvn2002/sodam/blob/main/SECURITY.md
+Preferred-Languages: vi, en
+Expires: 2027-10-23T00:00:00.000Z

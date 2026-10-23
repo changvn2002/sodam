@@ -71,12 +71,37 @@ describe('initialsDataUri — seed pins colour, name pins glyph', () => {
   });
 
   it('only uses backgrounds from the indigo/gold redesign system', () => {
-    const allowed = new Set(['#161A3D', '#1E2456', '#323C85', '#F3E5C3', '#F0F1F8', '#B3352C']);
+    const allowed = new Set(['#161A3D', '#1E2456', '#323C85', '#F3E5C3', '#F0F1F8']);
     for (const id of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']) {
       const fill = backgroundFill(decodeSvg(initialsDataUri('Trần Bình', id)));
       expect(fill).not.toBeNull();
       expect(allowed.has(fill!)).toBe(true);
     }
+  });
+});
+
+describe('initialsDataUri — Panel #02 T-02: lacquer purged from the identity layer', () => {
+  it('never renders the retired lacquer hex B3352C for any seed', () => {
+    // Sweep: 300 deterministic pseudo-ids (incl. cuid-shaped ones like the
+    // production person ids) — no avatar SVG may contain the retired hex
+    // in any role (fill or text colour).
+    for (let i = 0; i < 300; i += 1) {
+      const id = `cmvk${(i * 7919).toString(36)}person${i}`;
+      const svg = decodeSvg(initialsDataUri('Nguyễn Văn An', id));
+      expect(svg.toUpperCase()).not.toContain('B3352C');
+      const fill = backgroundFill(svg);
+      expect(fill).not.toBeNull();
+      expect(['#161A3D', '#1E2456', '#323C85', '#F3E5C3', '#F0F1F8']).toContain(fill);
+    }
+  });
+
+  it('is stable per person — interleaved calls for other people never shift a colour', () => {
+    const before = initialsDataUri('Bác Năm', 'person-funeral-visitor');
+    // Simulate other surfaces rendering other people in between.
+    for (const other of ['person-1', 'person-2', 'person-3', 'person-4', 'person-5']) {
+      initialsDataUri('Người Khác', other);
+    }
+    expect(initialsDataUri('Bác Năm', 'person-funeral-visitor')).toBe(before);
   });
 });
 

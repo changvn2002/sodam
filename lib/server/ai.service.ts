@@ -150,9 +150,12 @@ export async function photoCandidates(
   await sodam.requireBookAccess(bookId, code);
   const model = resolveModel('vision');
   if (!model) {
+    // SEC-11 (re-grade r2, chi tiết 5): message lỗi công khai TUYỆT ĐỐI
+    // không chứa tên biến môi trường hay chi tiết cấu hình — chỉ nói tính
+    // năng chưa bật, bằng tiếng Việt, như mọi lỗi người dùng khác.
     throw new HttpError(
       503,
-      'Photo extraction needs an AI vision model — set OPENAI_API_KEY (and optionally OPENAI_VISION_MODEL) to enable it.',
+      'Tính năng đọc ảnh chưa được bật trên máy chủ này. Bạn vẫn ghi khoản bằng tay hoặc bằng giọng nói được.',
     );
   }
   const response = await fetch(`${model.baseUrl}/chat/completions`, {

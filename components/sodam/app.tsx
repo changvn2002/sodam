@@ -123,7 +123,7 @@ function returnConsequence(pay: number, received: number, name: string): string 
     return `Trả ${money(pay)} trong ${money(received)} đã nhận — phần còn lại ${money(received - pay)} vẫn ở khoản Chờ trả.`;
   }
   if (pay > received) {
-    return `Trả ${money(pay)}, nhiều hơn ${money(received)} đã nhận — phần dư ${money(pay - received)} được ghi là Đưa quá tay.`;
+    return `Trả ${money(pay)}, nhiều hơn ${money(received)} đã nhận — phần dư ${money(pay - received)} được ghi là Trả dư.`;
   }
   return `Trả ${money(pay)} — sổ sẽ ghi bạn đã trả đủ cho ${name}.`;
 }
@@ -143,6 +143,10 @@ export function SodamApp() {
   const [books, setBooks] = useState<SodamBook[]>([]);
   const [events, setEvents] = useState<SodamEvent[]>([]);
   const [dash, setDash] = useState<SodamDashboard | null>(null);
+  // Mồi vô hiệu hoá dữ liệu cấp workspace (Panel #02 / C-1): mọi mutation đều
+  // chốt qua reloadWorkspace → nonce tăng → mọi mặt đang mount nạp lại dữ
+  // liệu riêng của mình, thay vì đứng hình cho tới khi người dùng chuyển mặt.
+  const [dataNonce, setDataNonce] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [toasts, setToasts] = useState<ToastData[]>([]);
@@ -209,6 +213,7 @@ export function SodamApp() {
       const [d, evs] = await Promise.all([api.dashboard(bookId), api.listEvents(bookId)]);
       setDash(d);
       setEvents(evs);
+      setDataNonce((n) => n + 1);
       setActiveEventId((cur) => {
         if (cur && evs.some((e) => e.id === cur)) return cur;
         return d.openEvent?.id ?? evs[0]?.id ?? null;
@@ -407,19 +412,19 @@ export function SodamApp() {
         Chia sẻ
       </button>
       {shareOpen ? (
-        <span className="absolute top-full right-0 z-30 mt-1 block w-72 rounded-xl border border-line bg-card p-3 shadow-[var(--shadow-lift)]">
-          <span className="block text-sm text-muted">
-            Link chứa mã mời của sổ này — ai có link cũng mở được sổ.
-          </span>
-          <span className="mt-2 block">
-            <InviteShareRow inviteCode={activeBook.inviteCode} />
-          </span>
-          <span className="mt-2 block text-xs text-muted">
-            Mã mời{' '}
-            <span className="font-mono font-medium text-ink">
-              {formatInviteCode(activeBook.inviteCode)}
-            </span>
-          </span>
+        <span className="absolute top-full right-0 z-30 mt-1 block w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-line bg-card p-3 shadow-[var(--shadow-lift)]">
+          <SharePanel
+            api={api}
+            book={activeBook}
+            onClose={() => setShareOpen(false)}
+            onRotated={(b) => {
+              setBooks((prev) =>
+                prev.map((x) => (x.id === b.id ? { ...x, inviteCode: b.inviteCode } : x)),
+              );
+            }}
+            onToast={pushToast}
+            onError={setError}
+          />
         </span>
       ) : null}
     </span>
@@ -582,6 +587,7 @@ export function SodamApp() {
             <OverviewFace
               api={api}
               bookId={bookId}
+              dataNonce={dataNonce}
               events={events}
               openEventId={dash?.openEvent?.id ?? null}
               onOpenEvent={(id) => {
@@ -602,6 +608,7 @@ export function SodamApp() {
               <EventFace
                 api={api}
                 bookId={bookId}
+                dataNonce={dataNonce}
                 event={activeEvent}
                 online={online}
                 searchQuery={searchQuery}
@@ -622,6 +629,7 @@ export function SodamApp() {
             <ReturnsFace
               api={api}
               bookId={bookId}
+              dataNonce={dataNonce}
               events={events}
               eventFilter={returnsEventFilter}
               onClearEventFilter={() => setReturnsEventFilter(null)}
@@ -636,6 +644,7 @@ export function SodamApp() {
             <PeopleFace
               api={api}
               bookId={bookId}
+              dataNonce={dataNonce}
               searchQuery={searchQuery}
               onOpenComposer={() => openComposer()}
               onError={setError}
@@ -646,6 +655,7 @@ export function SodamApp() {
             <TreeFace
               api={api}
               bookId={bookId}
+              dataNonce={dataNonce}
               contextKind={activeEvent?.kind ?? 'KHAC'}
               onToast={pushToast}
               onError={setError}
@@ -694,6 +704,135 @@ export function SodamApp() {
 }
 
 /** Hàng chép link trong menu chia sẻ — nút 44px có nhãn đầy đủ. */
+/**
+ * Panel chia sẻ sổ — DATA-04(ii) / UI-11 (re-grade r2): KHÔNG còn chép link
+ * một chạm. Người dùng phải qua 2 lớp ngay tại điểm chia sẻ:
+ *   Lớp 1 — xem trước (preview): thấy đúng link sẽ gửi + sổ nào sẽ mở,
+ *           kèm cảnh báo hệ quả nguyên văn (ai có link cũng mở được toàn
+ *           bộ sổ, không mật khẩu thêm).
+ *   Lớp 2 — xác nhận "Tôi hiểu, hiện nút chép link" mới hiện nút chép.
+ * Kèm lối thu hồi: đổi mã mời (mã cũ + mọi link đã gửi chết ngay) với xác
+ * nhận hệ quả riêng — đây là đường xử lý khi link đã lỡ phát tán.
+ */
+function SharePanel({
+  api,
+  book,
+  onClose,
+  onRotated,
+  onToast,
+  onError,
+}: {
+  api: SodamApi;
+  book: SodamBook;
+  onClose: () => void;
+  onRotated: (book: SodamBook) => void;
+  onToast: PushToast;
+  onError: (m: string | null) => void;
+}) {
+  const [revealed, setRevealed] = useState(false);
+  const [rotateStage, setRotateStage] = useState<'idle' | 'confirm' | 'busy'>('idle');
+  const [justRotated, setJustRotated] = useState(false);
+  const link = `${window.location.origin}/?code=${encodeURIComponent(book.inviteCode)}`;
+
+  const doRotate = async () => {
+    setRotateStage('busy');
+    try {
+      const next = await api.rotateInviteCode(book.id);
+      onRotated(next);
+      setRevealed(false);
+      setRotateStage('idle');
+      setJustRotated(true);
+      onToast('Đã đổi mã mời — link cũ không còn mở được sổ này.');
+    } catch (e) {
+      setRotateStage('idle');
+      onError(friendlyError(e, 'Chưa đổi được mã mời'));
+    }
+  };
+
+  return (
+    <span className="block">
+      <span className="block text-sm font-medium text-ink">Chia sẻ sổ «{book.name}»</span>
+
+      {justRotated ? (
+        <span
+          className="mt-2 block rounded-[10px] bg-indigo-50 px-3 py-2.5 text-sm text-indigo-700"
+          role="status"
+        >
+          Đã đổi mã mời. Mã mới{' '}
+          <span className="font-mono font-semibold">{formatInviteCode(book.inviteCode)}</span> — chỉ
+          thiết bị này biết; muốn chia sẻ tiếp phải qua cảnh báo dưới đây một lần nữa.
+        </span>
+      ) : null}
+
+      {/* Lớp xem trước: đúng thứ người nhận sẽ bấm vào. */}
+      <span className="mt-2 block rounded-[10px] border border-line bg-paper px-3 py-2.5">
+        <span className="block text-xs text-muted">Link sẽ gửi đi</span>
+        <span className="mt-0.5 block font-mono text-xs break-all text-ink">{link}</span>
+        <span className="mt-1.5 block text-xs text-muted">
+          Mã mời{' '}
+          <span className="font-mono font-medium text-ink">
+            {formatInviteCode(book.inviteCode)}
+          </span>
+        </span>
+      </span>
+
+      <span className="mt-2 block text-sm leading-relaxed text-muted">
+        Ai có link này cũng mở được <strong className="font-semibold text-ink">toàn bộ sổ</strong> —
+        xem hết mọi khoản, ghi thêm và sửa được, không cần mật khẩu nào nữa. Chỉ gửi cho người trong
+        nhà, và đừng đăng link lên nơi công khai.
+      </span>
+
+      {!revealed ? (
+        <span className="mt-3 flex gap-2">
+          <Btn variant="secondary" onClick={onClose}>
+            Quay lại
+          </Btn>
+          <Btn onClick={() => setRevealed(true)}>Tôi hiểu, hiện nút chép link</Btn>
+        </span>
+      ) : (
+        <span className="mt-3 block">
+          <InviteShareRow inviteCode={book.inviteCode} />
+        </span>
+      )}
+
+      {/* Thu hồi: đổi mã mời. */}
+      <span className="mt-3 block border-t border-line pt-3">
+        {rotateStage === 'confirm' || rotateStage === 'busy' ? (
+          <span className="block">
+            <span className="block text-sm leading-relaxed text-muted">
+              Đổi mã xong,{' '}
+              <strong className="font-semibold text-ink">
+                mã cũ và mọi link đã gửi sẽ không mở được sổ nữa
+              </strong>
+              . Thiết bị khác đang giữ mã cũ phải nhập mã mới; thiết bị này tự chuyển sang mã mới.
+            </span>
+            <span className="mt-2 flex gap-2">
+              <Btn
+                variant="secondary"
+                disabled={rotateStage === 'busy'}
+                onClick={() => setRotateStage('idle')}
+              >
+                Huỷ
+              </Btn>
+              <Btn disabled={rotateStage === 'busy'} onClick={() => void doRotate()}>
+                {rotateStage === 'busy' ? 'Đang đổi…' : 'Đổi mã ngay'}
+              </Btn>
+            </span>
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setRotateStage('confirm')}
+            className="inline-flex min-h-11 items-center rounded-[10px] px-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            Mã đã bị lộ? Đổi mã mời
+          </button>
+        )}
+      </span>
+    </span>
+  );
+}
+
 function InviteShareRow({ inviteCode }: { inviteCode: string }) {
   const [copied, setCopied] = useState(false);
   const [fallback, setFallback] = useState<string | null>(null);
@@ -1003,6 +1142,7 @@ function SeasonStrip() {
 function OverviewFace({
   api,
   bookId,
+  dataNonce,
   events,
   openEventId,
   onOpenEvent,
@@ -1012,6 +1152,7 @@ function OverviewFace({
 }: {
   api: SodamApi;
   bookId: string;
+  dataNonce: number;
   events: SodamEvent[];
   openEventId: string | null;
   onOpenEvent: (id: string) => void;
@@ -1022,11 +1163,12 @@ function OverviewFace({
   const [pending, setPending] = useState<SodamReturnItem[]>([]);
 
   useEffect(() => {
+    void dataNonce;
     void api
       .listReturns(bookId, 'OPEN')
       .then(setPending)
       .catch((e: Error) => onError(friendlyError(e, 'Lỗi tải khoản chờ trả')));
-  }, [api, bookId, onError]);
+  }, [api, bookId, onError, dataNonce]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 lg:p-5">
@@ -1638,6 +1780,7 @@ function QuickEntry({
 function EventFace({
   api,
   bookId,
+  dataNonce,
   event,
   online,
   searchQuery,
@@ -1649,6 +1792,7 @@ function EventFace({
 }: {
   api: SodamApi;
   bookId: string;
+  dataNonce: number;
   event: SodamEvent;
   online: boolean;
   searchQuery: string;
@@ -1672,6 +1816,17 @@ function EventFace({
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // C-1 (Panel #02): mutation từ composer ở tầng workspace (vd ghi khoản mới)
+  // chỉ gọi reloadWorkspace — detail của mặt đang mount phải nạp lại theo
+  // nonce, nếu không bảng + tổng đám đứng hình cả phiên tới khi reload cứng.
+  const seenNonce = useRef(dataNonce);
+  useEffect(() => {
+    if (seenNonce.current !== dataNonce) {
+      seenNonce.current = dataNonce;
+      void reload();
+    }
+  }, [dataNonce, reload]);
 
   const lex = lexiconForKind(event.kind);
   const group = lex.group;
@@ -1770,11 +1925,7 @@ function EventFace({
           <ul className="min-h-0 flex-1 divide-y divide-line overflow-y-auto">
             {shownGhosts.map((g, i) => (
               <li key={`ghost-${i}`} className="flex min-h-[52px] items-center gap-3 px-3.5 py-2.5">
-                <PersonAvatar
-                  name={g.personName}
-                  size="md"
-                  excludeLacquer={solemnLike || undefined}
-                />
+                <PersonAvatar name={g.personName} size="md" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[15px] font-medium text-ink">
                     {g.personName}
@@ -1797,12 +1948,7 @@ function EventFace({
                   aria-expanded={expandedId === e.id}
                   className="flex min-h-[52px] w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
                 >
-                  <PersonAvatar
-                    name={e.personName}
-                    seed={e.personId ?? undefined}
-                    size="md"
-                    excludeLacquer={solemnLike || undefined}
-                  />
+                  <PersonAvatar name={e.personName} seed={e.personId ?? undefined} size="md" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[15px] font-medium text-ink">
                       {e.personName}
@@ -2002,7 +2148,7 @@ function EntryExpand({
                   <>
                     {' '}
                     · đi nhiều hơn{' '}
-                    <span className="font-mono font-semibold text-lacquer">
+                    <span className="font-mono font-semibold text-ink">
                       {money(ret.overGivenVnd!)}
                     </span>
                   </>
@@ -2173,6 +2319,7 @@ function EntryExpand({
 function ReturnsFace({
   api,
   bookId,
+  dataNonce,
   events,
   eventFilter,
   onClearEventFilter,
@@ -2183,6 +2330,7 @@ function ReturnsFace({
 }: {
   api: SodamApi;
   bookId: string;
+  dataNonce: number;
   events: SodamEvent[];
   eventFilter: string | null;
   onClearEventFilter: () => void;
@@ -2207,6 +2355,15 @@ function ReturnsFace({
     void reload();
   }, [reload]);
 
+  // C-1: nạp lại khi workspace báo dữ liệu đổi (nonce) — xem EventFace.
+  const seenNonce = useRef(dataNonce);
+  useEffect(() => {
+    if (seenNonce.current !== dataNonce) {
+      seenNonce.current = dataNonce;
+      void reload();
+    }
+  }, [dataNonce, reload]);
+
   if (!all) return <p className="p-4 text-sm text-muted">Đang tải danh sách trả lễ…</p>;
 
   const receivedOf = (r: SodamReturnItem) => r.receivedAmountVnd ?? r.suggestedAmountVnd ?? 0;
@@ -2229,7 +2386,7 @@ function ReturnsFace({
             label: 'Đã trả',
             value: done.reduce((s, r) => s + (r.returnedAmountVnd ?? r.doneAmountVnd ?? 0), 0),
           },
-          { label: 'Quá tay', value: over.reduce((s, r) => s + (r.overGivenVnd ?? 0), 0) },
+          { label: 'Trả dư', value: over.reduce((s, r) => s + (r.overGivenVnd ?? 0), 0) },
         ].map((cell) => (
           <div key={cell.label} className="min-w-0 flex-1 px-3.5 py-3">
             <p className="text-xs text-muted">{cell.label}</p>
@@ -2260,7 +2417,7 @@ function ReturnsFace({
             { id: 'OPEN', label: `Chờ trả (${open.length})` },
             { id: 'DONE', label: 'Đã trả' },
             { id: 'SKIPPED', label: 'Bỏ qua' },
-            { id: 'OVER', label: 'Quá tay' },
+            { id: 'OVER', label: 'Trả dư' },
           ]}
         />
       </div>
@@ -2272,7 +2429,7 @@ function ReturnsFace({
               filter === 'OPEN'
                 ? 'Không còn khoản chờ trả'
                 : filter === 'OVER'
-                  ? 'Chưa có khoản quá tay'
+                  ? 'Chưa có khoản trả dư'
                   : filter === 'SKIPPED'
                     ? 'Chưa có khoản bỏ qua'
                     : 'Chưa có khoản đã trả'
@@ -2391,7 +2548,7 @@ function ReturnExpand({
                 <>
                   {' '}
                   · đi nhiều hơn{' '}
-                  <span className="font-mono font-semibold text-lacquer">
+                  <span className="font-mono font-semibold text-ink">
                     {money(item.overGivenVnd!)}
                   </span>{' '}
                   so với số đã nhận
@@ -2488,12 +2645,14 @@ type PersonAggregate = {
 function PeopleFace({
   api,
   bookId,
+  dataNonce,
   searchQuery,
   onOpenComposer,
   onError,
 }: {
   api: SodamApi;
   bookId: string;
+  dataNonce: number;
   searchQuery: string;
   onOpenComposer: () => void;
   onError: (m: string | null) => void;
@@ -2502,6 +2661,7 @@ function PeopleFace({
   const [selected, setSelected] = useState<PersonAggregate | null>(null);
 
   useEffect(() => {
+    void dataNonce;
     void (async () => {
       try {
         const [people, events] = await Promise.all([
@@ -2558,7 +2718,7 @@ function PeopleFace({
         setRows([]);
       }
     })();
-  }, [api, bookId, onError]);
+  }, [api, bookId, onError, dataNonce]);
 
   const q = searchQuery.trim().toLowerCase();
   const shown = (rows ?? []).filter((r) => !q || r.person.displayName.toLowerCase().includes(q));
@@ -2609,7 +2769,7 @@ function PeopleFace({
                   <span className="block font-mono text-[13px] font-medium tabular-nums">
                     +{money(r.received)}
                   </span>
-                  <span className="block font-mono text-[13px] font-medium tabular-nums text-lacquer">
+                  <span className="block font-mono text-[13px] font-medium tabular-nums text-ink">
                     −{money(r.given)}
                   </span>
                 </span>
@@ -2630,7 +2790,7 @@ function PeopleFace({
               Đối lưu: nhận{' '}
               <span className="font-mono font-semibold text-ink">{money(selected.received)}</span>
               {' · đi '}
-              <span className="font-mono font-semibold text-lacquer">{money(selected.given)}</span>
+              <span className="font-mono font-semibold text-ink">{money(selected.given)}</span>
               {selected.received - selected.given !== 0 ? (
                 <>
                   {' · chênh '}
@@ -2685,12 +2845,14 @@ const RELATION_LABELS: Record<SodamRelationType, string> = {
 function TreeFace({
   api,
   bookId,
+  dataNonce,
   contextKind,
   onToast,
   onError,
 }: {
   api: SodamApi;
   bookId: string;
+  dataNonce: number;
   contextKind: SodamEventKind;
   onToast: PushToast;
   onError: (m: string | null) => void;
@@ -2726,6 +2888,15 @@ function TreeFace({
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // C-1: nạp lại khi workspace báo dữ liệu đổi (nonce) — xem EventFace.
+  const seenNonce = useRef(dataNonce);
+  useEffect(() => {
+    if (seenNonce.current !== dataNonce) {
+      seenNonce.current = dataNonce;
+      void reload();
+    }
+  }, [dataNonce, reload]);
 
   if (people === null) {
     return <p className="p-4 text-sm text-muted">Đang tải cây họ…</p>;
@@ -2809,7 +2980,20 @@ function TreeFace({
                 </li>
               ))}
             </ul>
-          ) : null}
+          ) : (
+            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-4">
+              <p className="min-w-0 flex-1 text-sm leading-relaxed text-muted">
+                {people.length >= 2
+                  ? 'Chưa gắn quan hệ nào. Gắn quan hệ để các khoản qua lại tự xếp theo từng nhánh họ.'
+                  : 'Cần ít nhất hai người mới gắn được quan hệ — ghi khoản cho thêm một người nữa là gắn được.'}
+              </p>
+              {people.length >= 2 ? (
+                <Btn variant="secondary" onClick={() => setAttachOpen(true)}>
+                  <Plus className="size-4" aria-hidden /> Gắn quan hệ đầu tiên
+                </Btn>
+              ) : null}
+            </div>
+          )}
         </div>
       )}
 

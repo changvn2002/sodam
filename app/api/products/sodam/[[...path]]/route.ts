@@ -82,6 +82,12 @@ async function dispatch(req: Request, segments: string[]) {
     return sodam.dashboard(bookId, code);
   }
 
+  // /books/:bookId/rotate-code — đổi mã mời, mã cũ chết ngay (DATA-04(ii)).
+  // Credential hiện tại đi qua header x-book-code như mọi route cấp sổ.
+  if (segments.length === 3 && sub === 'rotate-code' && method === 'POST') {
+    return sodam.rotateInviteCode(bookId, code);
+  }
+
   // /books/:bookId/events
   if (segments.length === 3 && sub === 'events') {
     if (method === 'GET') return sodam.listEvents(bookId, code);

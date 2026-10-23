@@ -91,7 +91,7 @@ export default function InfoSections() {
               <span className="font-mono font-semibold text-indigo-700">4.</span>
               <p className="leading-relaxed text-muted">
                 <span className="font-medium text-ink">Theo dõi trả lễ và tổng kết.</span> Xem đã
-                nhận, đã trả, còn chờ, đưa quá tay theo từng đám; xuất CSV khi cần.
+                nhận, đã trả, còn chờ, trả dư theo từng đám; xuất CSV khi cần.
               </p>
             </li>
           </ol>
