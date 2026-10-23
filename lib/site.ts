@@ -4,7 +4,7 @@
  * time when a custom domain exists — no code change needed.
  */
 export function siteUrl() {
-  return (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://sodam.vercel.app').replace(/\/$/, '');
+  return (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://sodam-tawny.vercel.app').replace(/\/$/, '');
 }
 
 export const SITE_NAME = 'Sổ Đám';
