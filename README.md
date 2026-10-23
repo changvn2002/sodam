@@ -4,9 +4,9 @@
 
 # Sổ Đám (sodam)
 
-> Receive gifts, return favors, remember who — speak or snap like a village ledger.
+> Receive gifts, return favors, remember who — speak it like a village ledger.
 >
-> Nhận lễ, trả lễ, với ai — nói hoặc chụp ảnh như sổ dưới quê.
+> Nhận lễ, trả lễ, với ai — nói như sổ dưới quê.
 
 [![Live app](https://img.shields.io/badge/live-app-brightgreen)](https://sodam-tawny.vercel.app)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -17,13 +17,13 @@ code (or the share link) with family so everyone writes in the same book.
 Repository: https://github.com/changvn2002/sodam
 
 <p align="center">
-  <img src="docs/screenshots/sodam-desktop.png" alt="Sổ Đám — dashboard of a real family book: 12.000.000 ₫ received, 10.000.000 ₫ still held, 10.000.000 ₫ waiting to be returned" width="900">
+  <img src="docs/screenshots/sodam-desktop.png" alt="Sổ Đám — the wedding workspace of a real family book: 14.300.000 ₫ received across four events, 12.300.000 ₫ still held, 12.300.000 ₫ of returns still open" width="900">
 </p>
-<p align="center"><em>The live dashboard of a real family book — guests gave 12.000.000 ₫, returns are tracked per guest, and there is no sign-in anywhere.</em></p>
+<p align="center"><em>The live wedding workspace of a real family book — every guest row carries its return state, the totals strip spells out its own formula, and there is no sign-in anywhere.</em></p>
 
 **Tóm tắt (Tiếng Việt):** Sổ Đám là sổ ghi lễ cho các đám của người Việt — cưới, đám hỏi,
-đám tang, giỗ, mừng thọ, tân gia… Ghi ai đã mừng bao nhiêu bằng tay, bằng giọng nói hoặc
-chụp ảnh sổ tay; app tự theo dõi nghĩa vụ trả lễ, cho cả nhà dùng chung một cuốn sổ bằng
+đám tang, giỗ, mừng thọ, tân gia… Ghi ai đã mừng bao nhiêu bằng tay hoặc bằng giọng nói;
+app tự theo dõi nghĩa vụ trả lễ, cho cả nhà dùng chung một cuốn sổ bằng
 mã mời và vẽ cây họ. Dữ liệu nằm trong database PostgreSQL của chính bạn.
 
 **Sổ Đám** is a Vietnamese gift-ledger app for ceremonies — weddings (cưới), engagements
@@ -39,9 +39,9 @@ ran as a client module talking to a NestJS backend.
 
 ## ✨ Features
 
-- **Multiple books (sổ)** with **no account at all**: open the app and start. Each book is protected by a high-entropy invite code (12 characters, generated server-side with `crypto.randomBytes`); share the code or the one-tap share link and family members open the book directly and write together. Books you created or joined are remembered on each device (local storage) — there is no login anywhere.
+- **Multiple books (sổ)** with **no account at all**: open the app and start. Each book is protected by a high-entropy invite code (16 characters, ≈79 bits, generated server-side with rejection sampling over `crypto.randomBytes` and stored only as a hash); share the code or the one-tap share link and family members open the book directly and write together. Books you created or joined are remembered on each device (local storage) — there is no login anywhere.
 - **Events** across 13 Vietnamese ceremony kinds, hosted or attended, with per-event totals, settled amounts and net balances.
-- **Entries (lễ)** recorded manually, in batch, by voice (speech → AI parse of Vietnamese gift lines like *"anh Tuấn 500 nghìn"*), or from a **photo** of a handwritten ledger (vision AI extraction).
+- **Entries (lễ)** recorded manually, in batch, or by voice (speech → AI parse of Vietnamese gift lines like *"anh Tuấn 500 nghìn"*). Photo extraction from a handwritten ledger exists in the codebase but is **off in the public deployment** — it only activates when the server is configured with an AI key, and the entry point is hidden until then.
 - **Return obligations (trả lễ)** generated automatically when guests give at your hosted events; mark them done/skipped and see over-given amounts.
 - **People directory** with gift history search, plus a **family tree** built from relations (spouse / parent / child / sibling / other).
 - **Dashboard totals**: received, settled, pending returns, over-given, given.
@@ -52,58 +52,78 @@ ran as a client module talking to a NestJS backend.
 ## 🖼️ Screenshots
 
 Every screenshot below was captured from the live production deployment at
-https://sodam-tawny.vercel.app (the no-login build) with the app in a **real,
-populated state** — never an empty first-run screen. The book on screen is
-**"Sổ nhà họ Nguyễn"**, holding three events: a hosted
-wedding ("Cưới con gái Minh Anh", 18 Oct 2026) with six guests, a hosted death
-anniversary ("Giỗ ông nội"), and a wedding the family attended. Two return gifts have
-already been marked as returned — one of them 200.000 ₫ more than the guest
-originally gave.
+https://sodam-tawny.vercel.app (the redesign-v2 "Command Ledger" build) with the
+app in a **real, populated state** — never an empty first-run screen. The book on
+screen is **"Sổ nhà họ Nguyễn"**, holding four events: a hosted wedding
+("Cưới con gái Minh Anh", 18 Oct 2026) with six guests, a funeral
+("Tang lễ cụ Nguyễn Văn An", 2 Oct 2026) with four mourners, a hosted death
+anniversary ("Giỗ ông nội", 4 Oct 2026), and a wedding the family attended
+(11 Oct 2026). Two return gifts have already been marked as returned — one of
+them 200.000 ₫ more than the guest originally gave. Invite codes are never
+printed in this README; on the home screen the app itself only ever shows a
+masked code.
 
-### Dashboard — the whole book at a glance
+### The wedding workspace — ledger, totals and the formula
 
-![Desktop 1440×900 — dashboard of "Sổ nhà họ Nguyễn": 12.000.000 ₫ received, 10.000.000 ₫ still held after returns, 10.000.000 ₫ of returns still open](docs/screenshots/sodam-desktop.png)
+![Desktop 1440×900 — wedding workspace of "Sổ nhà họ Nguyễn": six guest rows with return states, event summary 10.000.000 ₫ received, and the book totals strip with its formula line](docs/screenshots/sodam-desktop.png)
 
-_After the three events, guests have given 12.000.000 ₫ in total ("Khách đã mừng").
-2.000.000 ₫ of it is already settled by return gifts, so the book still holds
-10.000.000 ₫ ("Còn giữ"); the family has paid out 2.700.000 ₫ in returns and
-attended-event gifts ("Đã trả / đi"), and 10.000.000 ₫ across 7 guests is still
-waiting to be returned ("Cần trả lễ"). The "Công thức sổ" line spells the maths out —
-including the 200.000 ₫ over-given part._
+_The workspace is one continuous screen: the rail on the left (Sổ → Đám → Mặt),
+the quick-entry command bar on top, and the ledger in the middle. The totals
+strip reads the whole book at a glance — 14.300.000 ₫ received ("Tổng đã nhận"),
+2.700.000 ₫ gone out ("Tổng đã đi"), 12.300.000 ₫ still held ("Còn giữ") and
+12.300.000 ₫ of returns still open across 11 obligations ("Cần trả lễ") — and
+the mono formula line underneath spells the maths out, including the
+200.000 ₫ over-given part. The wedding itself took 10.000.000 ₫ from 6 guests;
+2.000.000 ₫ is already settled, and every row carries its own return state:
+"Chờ trả", "Đã trả", or "Quá tay" for the guest who was returned more than
+they gave._
 
 | Mobile (390×844) | Social / link-preview (1280×640) |
 | --- | --- |
-| ![Mobile — the same dashboard stacked for phones, book totals on top](docs/screenshots/sodam-mobile.png) | ![Social — 1280×640 preview frame of the dashboard](docs/screenshots/sodam-social.png) |
-| _On a phone the four totals stack into a 2×2 grid above the formula line, with the bottom tab bar (Tổng quan / Trả lễ / Người / Họ hàng) always in reach._ | _The 1280×640 frame used when the app link is shared: the totals and the return-gift shortcut (7 guests · 10.000.000 ₫) are visible before the app even opens._ |
+| ![Mobile — the same wedding workspace on a phone: event chips, totals and formula on top, guest ledger below, "Còn giữ" and the record button pinned at the bottom](docs/screenshots/sodam-mobile.png) | ![Social — 1280×640 preview frame of the wedding workspace: totals strip, event summary and the first guest rows](docs/screenshots/sodam-social.png) |
+| _On a phone the rail becomes event chips and the four faces become tabs (Tổng quan / Trả lễ / Người / Cây họ); the bottom bar keeps "Còn giữ 12.300.000 ₫" and the "Ghi khoản" button always in reach._ | _The 1280×640 frame of the same screen: the totals, the wedding summary (10.000.000 ₫ mừng, 2.000.000 ₫ đã trả) and the settled / over-given rows are visible before the app even opens._ |
 
 ### Step by step
 
 **Step 1 — Open the app, create a book.** No account, no sign-in: the home screen
-lists the books kept on this device — each with its invite code — next to the
-create-book and join-by-code panels. Anyone with the code (or the share link) writes
-in the same book. The season card counts 106 days to Tết Nguyên đán (6 Feb 2027).
+carries the create-book / join-by-code tabs and lists the books kept on this
+device — each with its running total and a **masked** invite code (the full code
+is never shown on screen). The season card counts 106 days to Tết Nguyên đán
+(6 Feb 2027).
 
-![Step 1 — home: "Sổ nhà họ Nguyễn" book card, create/join panels and the wedding-season card](docs/screenshots/gallery-01-tao-so.png)
+![Step 1 — home: create/join tabs, the "Sổ nhà họ Nguyễn" book card with its masked invite code and 14.300.000 ₫ total, and the Tết countdown card](docs/screenshots/gallery-01-tao-so.png)
 
-**Step 2 — Record who gave what.** Inside an event, every guest row shows the amount
-they gave plus its own return-gift form. Settled rows are badged "Đã trả lễ":
-Cậu Tư Lê Văn Đức gave 1.000.000 ₫ and was returned 1.200.000 ₫ — the app flags the
-200.000 ₫ over-given part instead of silently absorbing it into the totals.
+**Step 2 — Record who gave what.** The entry sheet opens over the ledger: type a
+name (or dictate it on the "Giọng nói" tab), tap a quick amount chip, and the
+"Sẽ ghi:" line reads the entry back — "Chị Bảy Phạm Thu Hằng — 500.000 ₫ tiền
+mừng" — before "Lưu khoản mừng" saves it. Nothing is written until that read-back
+looks right.
 
-![Step 2 — guest ledger of the wedding: gift amounts, per-guest return forms, settled rows](docs/screenshots/gallery-02-ghi-le.png)
+![Step 2 — the entry sheet mid-action over the wedding ledger: guest name typed, 500.000 ₫ chip chosen, the read-back line confirming the entry before it is saved](docs/screenshots/gallery-02-ghi-le.png)
 
-**Step 3 — Work the return list.** The "Cần trả lễ" screen collects every open
-obligation across all events — here the gifts from the "Giỗ ông nội" anniversary
-(500.000 ₫, 500.000 ₫ and 1.000.000 ₫) — each with the amount to return, quick-pick
-amounts, and mark-done / skip actions.
+**Step 3 — Work the return list.** The "Trả lễ" face collects every obligation
+across all four events under one summary strip — 12.300.000 ₫ still waiting
+("Chờ trả"), 2.200.000 ₫ already returned ("Đã trả"), 200.000 ₫ given over
+("Quá tay") — with a tab per state and the amount owed shown on every row.
 
-![Step 3 — open return obligations with per-guest amounts and mark-done actions](docs/screenshots/gallery-03-tra-le.png)
+![Step 3 — the return list: summary strip (12.300.000 ₫ waiting, 2.200.000 ₫ returned, 200.000 ₫ over-given), state tabs, and open obligations from the anniversary, the funeral and the wedding](docs/screenshots/gallery-03-tra-le.png)
 
-**Step 4 — Every event keeps its own summary.** The wedding received 10.000.000 ₫
-from 6 guests; 2.000.000 ₫ is settled, 200.000 ₫ was over-given, and the solar date
-(18/10/2026) is shown together with its Vietnamese lunar date (9/9 âm lịch).
+**Step 4 — A funeral speaks a different language.** The same workspace, a
+completely different voice: the funeral of cụ Nguyễn Văn An totals
+"Tổng phúng viếng" — 2.300.000 ₫ from 4 "người viếng" (mourners) — the return
+column reads "Đã đi lại", and no wedding vocabulary appears anywhere on the
+screen. The solar date (2/10/2026) is shown together with its Vietnamese lunar
+date (22/8 âm lịch).
 
-![Step 4 — per-event summary for "Cưới con gái Minh Anh": received / kept / settled / over-given](docs/screenshots/gallery-04-tong-ket-su-kien.png)
+![Step 4 — the funeral workspace in its solemn voice: "Tổng phúng viếng" 2.300.000 ₫, four mourners listed as "Người viếng", lunar date 22/8 âm lịch](docs/screenshots/gallery-04-tong-ket-su-kien.png)
+
+**Step 5 — Every person, both directions.** The "Người" face totals each
+relationship across all events: Bác Hai Nguyễn Văn Thành has given
++4.000.000 ₫ over three events, while Nhà bác Bảy stands at −500.000 ₫ — the
+wedding the family attended. What the book owes and what it is owed is visible
+per person, not just per event.
+
+![Step 5 — the People face: eight people with two-way totals and their most recent event, from +5.000.000 ₫ (Ông bà ngoại) to −500.000 ₫ (Nhà bác Bảy)](docs/screenshots/gallery-05-nguoi.png)
 
 ## 🛠️ Tech stack
 
@@ -139,7 +159,7 @@ pnpm dev                    # http://localhost:3100
 
 Open the app and create your first book right away — there is no sign-in. No seed data is required.
 
-To try the UI without a database, set `NEXT_PUBLIC_SODAM_API_MODE=mock` in `.env` and run `pnpm dev` — the app uses an in-memory demo store instead of the API.
+To run the UI without a database, set `NEXT_PUBLIC_SODAM_API_MODE` to the in-memory mode (value documented in `.env.example`) and run `pnpm dev` — the app then uses an in-memory store instead of the API.
 
 ### Scripts
 
@@ -150,7 +170,7 @@ To try the UI without a database, set `NEXT_PUBLIC_SODAM_API_MODE=mock` in `.env
 | `pnpm start`                   | Run the production build                        |
 | `pnpm typecheck`               | Type-check (`tsc --noEmit`)                     |
 | `pnpm lint`                    | ESLint over the whole repo                      |
-| `pnpm test`                    | Vitest specs (mock API, API-route no-login flow, invite codes, lunar, money parser) |
+| `pnpm test`                    | Vitest specs (in-memory API, API-route no-login flow, invite codes, lunar, money parser) |
 | `pnpm format` / `format:check` | Prettier write / check                          |
 | `pnpm db:push`                 | Apply the Prisma schema to your database        |
 | `pnpm db:studio`               | Browse the database with Prisma Studio          |
@@ -164,7 +184,7 @@ To try the UI without a database, set `NEXT_PUBLIC_SODAM_API_MODE=mock` in `.env
 | `AI_TRANSLATE_BASE_URL` | No | Base URL of the OpenAI-compatible endpoint (default `https://api.openai.com/v1`). |
 | `AI_TRANSLATE_MODEL`  | No | Default model for chat + vision (default `gpt-4o-mini`).                    |
 | `OPENAI_BASE_URL`, `OPENAI_CHAT_MODEL`, `OPENAI_VISION_MODEL` | No | Optional overrides per capability. |
-| `NEXT_PUBLIC_SODAM_API_MODE` | No | `http` (default, real API) or `mock` (in-memory demo, no server data). |
+| `NEXT_PUBLIC_SODAM_API_MODE` | No | `http` (default, real API) or the in-memory mode (no server data; value in `.env.example`). |
 | `NEXT_PUBLIC_SITE_URL` | No (set in production) | Public base URL used for canonical/OG metadata, `sitemap.xml`, `robots.txt` and JSON-LD. The code default is this repo's production domain (`https://sodam-tawny.vercel.app`) — set it to your own URL when you deploy elsewhere. |
 
 See `.env.example` for the documented template.
@@ -180,7 +200,7 @@ app/
                                   #   relations, returns, CSV, AI, sync)
 components/sodam/                  # the product client (from the original codebase)
   app.tsx  shell.tsx               # screens + app shell
-  api/                             # typed API contract: http client + mock client
+  api/                             # typed API contract: http client + in-memory client
   lib/                             # event kinds, lunar calendar, money parser,
                                   #   offline outbox, local book registry (book-store)
   ui/                              # avatar, ledger row, lottie
@@ -202,7 +222,7 @@ docs/screenshots/                  # production screenshots used in this README
 ## 🧑‍💻 Development
 
 - Money parsing lives in `components/sodam/lib/parse-money.ts` (client) and `lib/server/parse-gift.ts` (server), lunar conversion in `components/sodam/lib/lunar.ts`, and the event-kind list in `lib/server/sodam-event-kinds.ts` — each ships with specs; run `pnpm test` before opening a PR.
-- The UI only talks to the product API through `components/sodam/api` (http / mock clients) — switch modes with `NEXT_PUBLIC_SODAM_API_MODE`, never by importing a client directly into components.
+- The UI only talks to the product API through `components/sodam/api` (http / in-memory clients) — switch modes with `NEXT_PUBLIC_SODAM_API_MODE`, never by importing a client directly into components.
 - Code style: TypeScript `strict`, ESLint via `eslint-config-next`, Prettier (single quotes, semicolons, print width 100). Run `pnpm lint && pnpm typecheck` before committing.
 - PRs welcome: fork → branch → PR against `main`. Describe the user-visible change and add screenshots for UI changes.
 
