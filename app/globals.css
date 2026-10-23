@@ -6,7 +6,7 @@
 @source "../app";
 
 /*
- * Sổ Đám — "The Indigo Ledger" (Sổ Chàm). Token normative theo DESIGN.md:
+ * Sổ Đám — "The Command Ledger". Token normative theo DESIGN.md:
  * chàm là màu hệ thống duy nhất; sơn mài chỉ cho tiền đi / cảnh báo phá hủy;
  * mọi số tiền dùng IBM Plex Mono. Bề mặt phẳng tuyệt đối, không nền chuyển màu trang trí.
  */
@@ -23,6 +23,11 @@
   --indigo-500: #5b67b8;
   --indigo-100: #d8dcf2;
   --indigo-50: #f0f1f8;
+
+  --solemn-700: #3b4054;
+  --solemn-soft: #edeef3;
+  --memorial-700: #54452a;
+  --memorial-soft: #fbf6ea;
 
   --paper: #f5f5f7;
   --card: #ffffff;
@@ -68,6 +73,10 @@
   --color-indigo-500: var(--indigo-500);
   --color-indigo-100: var(--indigo-100);
   --color-indigo-50: var(--indigo-50);
+  --color-solemn-700: var(--solemn-700);
+  --color-solemn-soft: var(--solemn-soft);
+  --color-memorial-700: var(--memorial-700);
+  --color-memorial-soft: var(--memorial-soft);
   --color-paper: var(--paper);
   --color-card: var(--card);
   --color-ink: var(--ink);
@@ -158,10 +167,15 @@ body {
   animation: fade-in 160ms ease-out both;
 }
 
+.animate-face {
+  animation: fade-in 160ms ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-sheet,
   .animate-row,
-  .animate-fade {
+  .animate-fade,
+  .animate-face {
     animation: none;
   }
 }

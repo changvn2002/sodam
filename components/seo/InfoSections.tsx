@@ -57,12 +57,10 @@ export default function InfoSections() {
       <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6">
         <AccordionItem id="gioi-thieu" title="Giới thiệu">
           <p className="max-w-3xl leading-relaxed text-muted">
-            Nhà có đám là có cả trăm phong bì: ai mừng bao nhiêu, mừng ở đám nào, rồi đến lượt nhà
-            mình phải trả lễ ai, trả bao nhiêu cho phải phép. Sổ giấy thì dễ thất lạc, cộng tổng
-            mệt, cần đối chiếu lại không nhớ nổi. Sổ Đám đưa cuốn sổ đó lên điện thoại: ghi từng
-            khoản lễ, tự cộng tổng theo từng đám và giữ danh sách trả lễ để không sót một ai. App
-            không bắt đăng ký tài khoản. Tạo sổ, nhận mã mời, cả nhà dùng chung mã đó là cùng viết
-            vào một cuốn sổ.
+            Nhà có đám là có cả trăm phong bì khó quản: ai mừng bao nhiêu, ở đám nào, rồi nhà mình
+            trả lễ ai, bao nhiêu cho phải phép. Sổ giấy dễ thất lạc, khó cộng tổng. Sổ Đám ghi từng
+            khoản, tự cộng tổng theo từng đám và giữ danh sách trả lễ để không sót ai. Không cần tài
+            khoản: tạo sổ, nhận mã mời, cả nhà cùng dùng mã đó vào một cuốn sổ.
           </p>
         </AccordionItem>
 
@@ -71,15 +69,15 @@ export default function InfoSections() {
             <li className="flex gap-3">
               <span className="font-mono font-semibold text-indigo-700">1.</span>
               <p className="leading-relaxed text-muted">
-                <span className="font-medium text-ink">Tạo sổ, nhận mã mời.</span> Mở app và tạo
-                cuốn sổ đầu tiên, không cần tài khoản hay mật khẩu.
+                <span className="font-medium text-ink">Tạo sổ, nhận mã mời.</span> Mở app, tạo cuốn
+                sổ đầu tiên, không cần tài khoản hay mật khẩu.
               </p>
             </li>
             <li className="flex gap-3">
               <span className="font-mono font-semibold text-indigo-700">2.</span>
               <p className="leading-relaxed text-muted">
                 <span className="font-medium text-ink">Chia sẻ cho cả nhà.</span> Gửi mã mời hoặc
-                đường link chia sẻ; ai mở link là vào thẳng cuốn sổ và ghi cùng.
+                link chia sẻ; ai mở link là vào thẳng sổ và ghi cùng.
               </p>
             </li>
             <li className="flex gap-3">
@@ -93,7 +91,7 @@ export default function InfoSections() {
               <span className="font-mono font-semibold text-indigo-700">4.</span>
               <p className="leading-relaxed text-muted">
                 <span className="font-medium text-ink">Theo dõi trả lễ và tổng kết.</span> Xem đã
-                nhận, đã trả, còn chờ và đưa quá tay theo từng đám; xuất CSV khi cần lưu trữ.
+                nhận, đã trả, còn chờ, đưa quá tay theo từng đám; xuất CSV khi cần.
               </p>
             </li>
           </ol>
@@ -121,11 +119,9 @@ export default function InfoSections() {
 
         <AccordionItem id="ma-moi" title="Mã mời là chìa khóa">
           <p className="max-w-3xl leading-relaxed text-muted">
-            Sổ Đám bỏ hẳn tài khoản và mật khẩu để người lớn tuổi trong nhà cũng mở lên là dùng
-            được. Mỗi cuốn sổ có một mã mời riêng gồm 16 ký tự: đúng mã mới vào được sổ, sai mã thì
-            app trả lời như cuốn sổ không tồn tại. Đổi lại, ai giữ mã cũng đọc và ghi được vào sổ,
-            nên hãy giữ mã mời như giữ chìa khóa nhà: chỉ gửi cho người thân qua kênh riêng, đừng
-            đăng nơi công khai.
+            Sổ Đám bỏ tài khoản, mật khẩu để người lớn tuổi mở lên là dùng được. Mỗi sổ có mã mời 16
+            ký tự là chìa khóa: sai mã, app trả lời như sổ không tồn tại. Ai giữ mã đều vào được,
+            nên chỉ gửi mã cho người thân qua kênh riêng.
           </p>
         </AccordionItem>
 

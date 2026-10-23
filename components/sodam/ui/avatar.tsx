@@ -55,8 +55,12 @@ function hashSeed(value: string): number {
   return h;
 }
 
-function toneFromSeed(seed: string) {
-  return AVATAR_TONES[hashSeed(seed) % AVATAR_TONES.length]!;
+function toneFromSeed(seed: string, excludeLacquer?: boolean) {
+  if (!excludeLacquer) {
+    return AVATAR_TONES[hashSeed(seed) % AVATAR_TONES.length]!;
+  }
+  const pool = AVATAR_TONES.filter((tone) => tone.bg !== 'B3352C');
+  return pool[hashSeed(seed) % pool.length]!;
 }
 
 /**
@@ -85,14 +89,14 @@ const dataUriCache = new Map<string, string>();
  * không mạng. Glyph suy từ `name` (seed của thư viện); cặp màu nền/chữ
  * suy từ `seed` (id ổn định của thực thể) nếu có, mặc định từ `name`.
  */
-export function initialsDataUri(name: string, seed?: string): string {
+export function initialsDataUri(name: string, seed?: string, excludeLacquer?: boolean): string {
   const displayName = name.trim() || 'guest';
   const toneKey = (seed ?? '').trim() || displayName;
-  const cacheKey = `${toneKey}|${displayName}`;
+  const cacheKey = `${toneKey}|${displayName}|${excludeLacquer ? 'no-lacquer' : 'all'}`;
   const cached = dataUriCache.get(cacheKey);
   if (cached) return cached;
 
-  const tone = toneFromSeed(toneKey);
+  const tone = toneFromSeed(toneKey, excludeLacquer);
   const uri = createAvatar(initials, {
     seed: displayName,
     backgroundColor: [tone.bg],
@@ -154,17 +158,23 @@ export function PersonAvatar({
   size = 'md',
   className,
   seed,
+  excludeLacquer,
 }: {
   name: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
   /** Id ổn định của người (tuỳ chọn) — ghim màu nền, không ảnh hưởng chữ cái. */
   seed?: string;
+  /** Khi true, vòng chọn tone bỏ cặp lacquer (ngữ cảnh tang/giỗ). */
+  excludeLacquer?: boolean;
 }) {
   const dim =
     size === 'sm' ? 'size-8' : size === 'lg' ? 'size-12' : size === 'xl' ? 'size-14' : 'size-10';
   const px = size === 'sm' ? 64 : size === 'lg' ? 96 : size === 'xl' ? 112 : 80;
-  const uri = useMemo(() => initialsDataUri(name, seed), [name, seed]);
+  const uri = useMemo(
+    () => initialsDataUri(name, seed, excludeLacquer),
+    [name, seed, excludeLacquer],
+  );
 
   return (
     <span

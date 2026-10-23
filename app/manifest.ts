@@ -3,8 +3,8 @@ import { SITE_DESCRIPTION, SITE_NAME } from '@/lib/site';
 
 /**
  * PWA manifest — installable web app using the product's real brand assets.
- * The PNG icons are raster renditions of the untouched brand logo, generated
- * by scripts/generate-brand-pngs.mjs (artwork never modified).
+ * The PNG icons are raster renditions of the v2 logo mark from the
+ * redesign-v2 asset pack (assets/logo-mark.svg).
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {

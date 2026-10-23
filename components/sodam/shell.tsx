@@ -1,11 +1,34 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowLeft, Check, Clock, Copy, Home, Minus, Share2, TriangleAlert, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  Clock,
+  Copy,
+  Minus,
+  Plus,
+  Search,
+  Share2,
+  TriangleAlert,
+  X,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { OfflineBanner } from './ui/offline-ui';
+import { GROUP_STYLE, groupOfKind } from './lib/lexicon';
+import type { SodamEvent } from './api/types';
 
-export type SodamNavId = 'home' | 'overview' | 'returns' | 'people' | 'tree' | 'event';
+export type SodamFace = 'overview' | 'event' | 'returns' | 'people' | 'tree';
+
+export const FACE_LABELS: Record<SodamFace, string> = {
+  overview: 'Tổng quan',
+  event: 'Đám',
+  returns: 'Trả lễ',
+  people: 'Người',
+  tree: 'Cây họ',
+};
+
+const FACE_ORDER: SodamFace[] = ['overview', 'returns', 'people', 'tree'];
 
 /** Mã mời hiển thị theo nhóm 4 ký tự (A11Y-09). */
 export function formatInviteCode(code: string): string {
@@ -13,108 +36,456 @@ export function formatInviteCode(code: string): string {
   return clean.replace(/(.{4})/g, '$1 ').trim();
 }
 
-const bookNav: Array<{ id: SodamNavId; label: string }> = [
-  { id: 'overview', label: 'Đám' },
-  { id: 'returns', label: 'Trả lễ' },
-  { id: 'people', label: 'Người' },
-  { id: 'tree', label: 'Cây họ' },
-];
+/* ------------------------------------------------------------------ */
+/* Khung sườn Command Ledger (REDESIGN-V2): rail trái chàm ở desktop, */
+/* khối trên + thanh ghi nhanh ghim đáy ở mobile. Rail kể câu chuyện  */
+/* sổ → đám → mặt; vùng children cuộn nội bộ, trang không dài theo    */
+/* dữ liệu (SC-2).                                                    */
+/* ------------------------------------------------------------------ */
 
-type ShellProps = {
-  /** Tên hiển thị trên AppBar: tên sổ khi đang trong sổ, "Sổ Đám" ở trang chủ. */
-  title: string;
+export type WorkspaceShellProps = {
+  bookName: string;
   inviteCode?: string;
   online: boolean;
   error: string | null;
-  activeNav: SodamNavId;
-  onNav: (id: SodamNavId) => void;
-  showBookNav: boolean;
-  onBackHome?: () => void;
+  books: Array<{ id: string; name: string }>;
+  events: SodamEvent[];
+  activeBookId: string | null;
+  activeEventId: string | null;
+  face: SodamFace;
+  returnsBadge?: number;
+  onSelectBook: (id: string) => void;
+  onSelectEvent: (id: string) => void;
+  onFace: (face: SodamFace) => void;
+  onHome: () => void;
+  onCreateBook: () => void;
+  onCreateEvent: () => void;
+  totalsStrip?: ReactNode;
+  commandBar?: ReactNode;
+  outboxChip?: ReactNode;
+  shareMenu?: ReactNode;
+  overflowMenu?: ReactNode;
+  mobileTotal?: { label: string; value: string };
+  quickBarAction?: ReactNode;
   children: ReactNode;
 };
 
-export function SodamShell({
-  title,
-  inviteCode,
+export function WorkspaceShell({
+  bookName,
   online,
   error,
-  activeNav,
-  onNav,
-  showBookNav,
-  onBackHome,
+  books,
+  events,
+  activeBookId,
+  activeEventId,
+  face,
+  returnsBadge,
+  onSelectBook,
+  onSelectEvent,
+  onFace,
+  onHome,
+  onCreateBook,
+  onCreateEvent,
+  totalsStrip,
+  commandBar,
+  outboxChip,
+  shareMenu,
+  overflowMenu,
+  mobileTotal,
+  quickBarAction,
   children,
-}: ShellProps) {
+}: WorkspaceShellProps) {
+  const faceLabel = FACE_LABELS[face];
+
+  const railSectionLabel = 'px-5 pt-5 pb-1.5 text-xs font-medium text-indigo-100';
+  const railRow =
+    'flex min-h-11 w-full items-center gap-2 rounded-[10px] px-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-100';
+
   return (
-    <div className="flex min-h-dvh flex-col bg-paper text-ink">
-      <div className="sticky top-0 z-30">
-        <header className="bg-indigo-950 text-white shadow-[var(--shadow-card)]">
-          <div
-            className="mx-auto flex min-h-14 w-full max-w-6xl items-center gap-2 px-4 sm:px-6"
-            style={{ paddingTop: 'env(safe-area-inset-top)' }}
+    <div className="flex h-dvh flex-col bg-paper text-ink lg:grid lg:grid-cols-[264px_minmax(0,1fr)]">
+      {/* Rail — desktop */}
+      <aside className="hidden min-h-0 flex-col overflow-y-auto bg-indigo-950 text-white lg:flex">
+        <div className="flex items-center gap-2.5 px-5 pt-5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/products/brand/sodam-logo.svg"
+            alt=""
+            width={32}
+            height={32}
+            className="size-8 shrink-0 rounded-lg"
+          />
+          <p className="text-[17px] font-semibold">Sổ Đám</p>
+        </div>
+
+        <p className={railSectionLabel}>Sổ</p>
+        <nav aria-label="Sổ của bạn" className="space-y-0.5 px-2">
+          {books.map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => onSelectBook(b.id)}
+              aria-current={b.id === activeBookId ? 'true' : undefined}
+              className={cn(
+                railRow,
+                b.id === activeBookId
+                  ? 'bg-indigo-800 font-semibold text-white'
+                  : 'text-indigo-100 hover:bg-indigo-800 hover:text-white',
+              )}
+            >
+              <span className="min-w-0 flex-1 truncate">{b.name}</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={onCreateBook}
+            className={cn(
+              railRow,
+              'font-medium text-indigo-100 hover:bg-indigo-800 hover:text-white',
+            )}
           >
-            {showBookNav && onBackHome ? (
+            <Plus className="size-4 shrink-0" aria-hidden /> Tạo sổ
+          </button>
+        </nav>
+
+        <p className={railSectionLabel}>Đám</p>
+        <nav aria-label="Đám trong sổ" className="space-y-0.5 px-2">
+          {events.map((e) => {
+            const style = GROUP_STYLE[groupOfKind(e.kind)];
+            const active = e.id === activeEventId && face === 'event';
+            return (
               <button
+                key={e.id}
                 type="button"
-                onClick={onBackHome}
-                className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-[10px] text-indigo-100 transition-colors hover:bg-indigo-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-                aria-label="Về danh sách sổ"
+                onClick={() => onSelectEvent(e.id)}
+                aria-current={active ? 'true' : undefined}
+                className={cn(
+                  railRow,
+                  active
+                    ? 'bg-indigo-800 font-semibold text-white'
+                    : 'text-indigo-100 hover:bg-indigo-800 hover:text-white',
+                )}
               >
-                <ArrowLeft className="size-5" />
+                <span className={cn('size-2 shrink-0 rounded-full', style.dot)} aria-hidden />
+                <span className="min-w-0 flex-1 truncate">{e.title}</span>
               </button>
-            ) : null}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/products/brand/sodam-logo.svg"
-              alt=""
-              width={32}
-              height={32}
-              className="size-8 shrink-0 rounded-lg"
-            />
-            <p className="min-w-0 flex-1 truncate text-[17px] font-semibold">{title}</p>
-            {inviteCode ? <ShareBookButton inviteCode={inviteCode} /> : null}
+            );
+          })}
+          <button
+            type="button"
+            onClick={onCreateEvent}
+            className={cn(
+              railRow,
+              'font-medium text-indigo-100 hover:bg-indigo-800 hover:text-white',
+            )}
+          >
+            <Plus className="size-4 shrink-0" aria-hidden /> Tạo đám
+          </button>
+        </nav>
+
+        <p className={railSectionLabel}>Mặt</p>
+        <nav aria-label="Mặt trong sổ" className="space-y-0.5 px-2">
+          {FACE_ORDER.map((f) => {
+            const active = face === f || (f === 'overview' && face === 'event');
+            return (
+              <button
+                key={f}
+                type="button"
+                onClick={() => onFace(f)}
+                aria-current={active ? 'true' : undefined}
+                className={cn(
+                  railRow,
+                  active
+                    ? 'bg-indigo-800 font-semibold text-white'
+                    : 'text-indigo-100 hover:bg-indigo-800 hover:text-white',
+                )}
+              >
+                <span className="min-w-0 flex-1 truncate">{FACE_LABELS[f]}</span>
+                {f === 'returns' && returnsBadge ? (
+                  <span className="inline-flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-gold-soft px-1.5 font-mono text-xs font-semibold text-gold-ink tabular-nums">
+                    {returnsBadge}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </nav>
+
+        {outboxChip ? <div className="mt-auto px-4 pt-4 pb-5">{outboxChip}</div> : null}
+      </aside>
+
+      {/* Cột phải */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Thanh trên — desktop */}
+        <header className="hidden min-h-[52px] items-center gap-3 border-b border-line bg-card px-5 lg:flex">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs text-muted">
+              {bookName} / {faceLabel}
+            </p>
+            <h1 className="truncate text-[17px] leading-tight font-semibold">{bookName}</h1>
           </div>
-          {inviteCode ? (
-            <div className="mx-auto flex w-full max-w-6xl items-center gap-2 px-4 pb-2.5 sm:px-6">
-              <span className="text-xs text-indigo-100">Mã mời</span>
-              <InviteCodeChip code={inviteCode} dark />
-            </div>
-          ) : null}
+          <div className="flex shrink-0 items-center gap-1">
+            {shareMenu}
+            {overflowMenu}
+          </div>
         </header>
 
-        {showBookNav ? (
-          <div className="border-b border-line bg-card">
-            <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
-              <SegmentedTabs
-                ariaLabel="Mục trong sổ"
-                value={activeNav === 'event' ? 'overview' : activeNav}
-                onChange={(id) => onNav(id as SodamNavId)}
-                options={bookNav.map((n) => ({ id: n.id, label: n.label }))}
-                className="border-0 bg-transparent p-0"
-              />
+        {/* Khối trên — mobile */}
+        <div className="border-b border-line bg-card lg:hidden">
+          <div className="flex min-h-14 items-center gap-1 px-2">
+            <button
+              type="button"
+              onClick={onHome}
+              aria-label="Về danh sách sổ"
+              className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-[10px] text-ink transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              <ArrowLeft className="size-5" aria-hidden />
+            </button>
+            <h1 className="min-w-0 flex-1 truncate text-[17px] font-semibold">{bookName}</h1>
+            <div className="flex shrink-0 items-center">
+              {shareMenu}
+              {overflowMenu}
             </div>
+          </div>
+
+          <div
+            className="flex gap-1.5 overflow-x-auto px-3 pb-2"
+            role="group"
+            aria-label="Chọn đám"
+          >
+            {events.map((e) => {
+              const style = GROUP_STYLE[groupOfKind(e.kind)];
+              const active = e.id === activeEventId && face === 'event';
+              return (
+                <button
+                  key={e.id}
+                  type="button"
+                  onClick={() => onSelectEvent(e.id)}
+                  aria-pressed={active}
+                  className={cn(
+                    'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
+                    active
+                      ? cn('font-semibold', style.selectedChip)
+                      : 'border-line-strong bg-card text-ink',
+                  )}
+                >
+                  <span className={cn('size-2 shrink-0 rounded-full', style.dot)} aria-hidden />
+                  {e.title}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={onCreateEvent}
+              className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full border border-line-strong bg-card px-3 text-sm font-medium whitespace-nowrap text-indigo-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              <Plus className="size-4" aria-hidden /> Tạo đám
+            </button>
+          </div>
+
+          <nav aria-label="Mặt trong sổ" className="flex px-2">
+            {FACE_ORDER.map((f) => {
+              const active = face === f || (f === 'overview' && face === 'event');
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => onFace(f)}
+                  aria-current={active ? 'true' : undefined}
+                  className={cn(
+                    'relative inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 px-1 text-sm whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
+                    active ? 'font-semibold text-indigo-700' : 'font-medium text-muted',
+                  )}
+                >
+                  {FACE_LABELS[f]}
+                  {f === 'returns' && returnsBadge ? (
+                    <span className="inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-gold-soft px-1 font-mono text-[11px] font-semibold text-gold-ink tabular-nums">
+                      {returnsBadge}
+                    </span>
+                  ) : null}
+                  {active ? (
+                    <span
+                      className="absolute right-2 bottom-0 left-2 h-0.5 bg-indigo-700"
+                      aria-hidden
+                    />
+                  ) : null}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        <OfflineBanner online={online} />
+        {commandBar}
+        {totalsStrip}
+
+        {error ? (
+          <div className="px-4 pt-3 lg:px-5">
+            <p
+              role="alert"
+              className="rounded-xl border border-lacquer bg-card px-3 py-2.5 text-sm text-ink"
+            >
+              {error}
+            </p>
           </div>
         ) : null}
 
-        <OfflineBanner online={online} />
-      </div>
+        <div className="flex min-h-0 flex-1 flex-col">{children}</div>
 
-      {error ? (
-        <div className="mx-auto w-full max-w-6xl px-4 pt-3 sm:px-6">
-          <p
-            role="alert"
-            className="rounded-xl border border-lacquer bg-card px-3 py-2.5 text-sm text-ink"
-          >
-            {error}
-          </p>
+        {/* Thanh ghi nhanh ghim đáy — mobile */}
+        <div
+          className="flex min-h-[52px] items-center gap-3 border-t border-line bg-card px-4 py-2 lg:hidden"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
+          {mobileTotal ? (
+            <div className="min-w-0">
+              <p className="text-xs text-muted">{mobileTotal.label}</p>
+              <p className="truncate font-mono text-[15px] font-semibold tabular-nums">
+                {mobileTotal.value}
+              </p>
+            </div>
+          ) : null}
+          {outboxChip}
+          {quickBarAction ? <div className="ml-auto shrink-0">{quickBarAction}</div> : null}
         </div>
-      ) : null}
-
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-4 sm:px-6 sm:py-6">{children}</main>
+      </div>
     </div>
   );
 }
 
-function ShareBookButton({ inviteCode }: { inviteCode: string }) {
+/* ------------------------------------------------------------------ */
+/* Command bar: nút ghi khoản phổ quát + chọn đám + tìm trong bảng.  */
+/* ------------------------------------------------------------------ */
+
+export function CommandBar({
+  onQuickEntry,
+  searchValue,
+  onSearchChange,
+  searchPlaceholder,
+  searchLabel,
+  showSearch = false,
+  events,
+  activeEventId,
+  onSelectEvent,
+  outboxChip,
+}: {
+  onQuickEntry: () => void;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  searchPlaceholder?: string;
+  searchLabel?: string;
+  showSearch?: boolean;
+  events: SodamEvent[];
+  activeEventId: string | null;
+  onSelectEvent: (id: string) => void;
+  outboxChip?: ReactNode;
+}) {
+  return (
+    <div className="flex min-h-12 flex-wrap items-center gap-2 border-b border-line bg-card px-4 py-1.5 lg:px-5">
+      <Btn onClick={onQuickEntry}>
+        <Plus className="size-4" aria-hidden /> Ghi khoản
+      </Btn>
+      {events.length > 0 ? (
+        <label className="sr-only" htmlFor="sodam-event-select">
+          Chọn đám đang xem
+        </label>
+      ) : null}
+      {events.length > 0 ? (
+        <select
+          id="sodam-event-select"
+          aria-label="Chọn đám đang xem"
+          value={activeEventId ?? ''}
+          onChange={(e) => {
+            if (e.target.value) onSelectEvent(e.target.value);
+          }}
+          className="min-h-11 max-w-44 truncate rounded-[10px] border border-line-strong bg-card px-2.5 text-sm text-ink outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
+        >
+          <option value="" disabled>
+            Chọn đám
+          </option>
+          {events.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.title}
+            </option>
+          ))}
+        </select>
+      ) : null}
+      {showSearch ? (
+        <div className="relative min-w-36 flex-1 sm:max-w-xs sm:flex-none sm:basis-64">
+          <Search
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted"
+            aria-hidden
+          />
+          <label className="sr-only" htmlFor="sodam-search">
+            {searchLabel ?? 'Tìm trong bảng'}
+          </label>
+          <input
+            id="sodam-search"
+            type="search"
+            value={searchValue ?? ''}
+            onChange={(e) => onSearchChange?.(e.target.value)}
+            placeholder={searchPlaceholder ?? 'Tìm…'}
+            aria-label={searchLabel ?? 'Tìm trong bảng'}
+            className="min-h-11 w-full rounded-[10px] border border-line-strong bg-card pr-3 pl-9 text-sm text-ink outline-none placeholder:text-muted focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30"
+          />
+        </div>
+      ) : null}
+      {outboxChip ? <span className="hidden lg:inline-flex">{outboxChip}</span> : null}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Dải tổng của sổ: 4 số trung tính + 1 dòng công thức Mono.          */
+/* ------------------------------------------------------------------ */
+
+export function TotalsStrip({
+  received,
+  given,
+  kept,
+  pendingLabel,
+  pendingValue,
+  pendingCount,
+  overGiven,
+}: {
+  received: string;
+  given: string;
+  kept: string;
+  pendingLabel: string;
+  pendingValue: string;
+  pendingCount: number;
+  overGiven?: string | null;
+}) {
+  const cells = [
+    { label: 'Tổng đã nhận', value: received },
+    { label: 'Tổng đã đi', value: given },
+    { label: 'Còn giữ', value: kept },
+    {
+      label: pendingLabel,
+      value: pendingValue,
+      sub: pendingCount > 0 ? `${pendingCount} khoản` : undefined,
+    },
+  ];
+  return (
+    <section aria-label="Tổng của sổ" className="border-b border-line bg-card px-4 py-2 lg:px-5">
+      <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+        {cells.map((c) => (
+          <p key={c.label} className="text-sm whitespace-nowrap">
+            <span className="text-muted">{c.label} </span>
+            <span className="font-mono font-semibold tabular-nums">{c.value}</span>
+            {c.sub ? <span className="text-muted"> ({c.sub})</span> : null}
+          </p>
+        ))}
+      </div>
+      <p className="mt-0.5 truncate font-mono text-xs tabular-nums text-muted">
+        Đã nhận {received} − đã đi {given} = còn giữ {kept}
+        {overGiven ? ` · đi nhiều hơn ${overGiven}` : ''}
+      </p>
+    </section>
+  );
+}
+
+/** Nút chia sẻ sổ: chép link chứa mã mời (menu chia sẻ do app dựng khi cần preview). */
+export function ShareBookButton({ inviteCode }: { inviteCode: string }) {
   const [copied, setCopied] = useState(false);
   const [fallback, setFallback] = useState<string | null>(null);
 
@@ -142,14 +513,14 @@ function ShareBookButton({ inviteCode }: { inviteCode: string }) {
       <button
         type="button"
         onClick={() => void share()}
-        className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-[10px] px-2 text-sm font-medium text-white transition-colors hover:bg-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-[10px] px-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         aria-label="Chia sẻ sổ cho người nhà"
       >
         {copied ? <Check className="size-5" /> : <Share2 className="size-5" />}
         <span className="hidden sm:inline">{copied ? 'Đã chép link' : 'Chia sẻ'}</span>
       </button>
       {fallback ? (
-        <span className="absolute right-0 top-full z-10 mt-1 block w-64 rounded-lg border border-line bg-card p-2 font-mono text-xs break-all text-ink">
+        <span className="absolute top-full right-0 z-10 mt-1 block w-64 rounded-lg border border-line bg-card p-2 font-mono text-xs break-all text-ink">
           {fallback}
         </span>
       ) : null}
@@ -244,9 +615,17 @@ export function StatusPill({
   status,
   label,
 }: {
-  status: 'OPEN' | 'DONE' | 'OVER' | 'SKIPPED';
+  status: 'OPEN' | 'DONE' | 'OVER' | 'SKIPPED' | 'PENDING';
   label?: string;
 }) {
+  if (status === 'PENDING') {
+    return (
+      <span className="inline-flex min-h-7 items-center gap-1 rounded-full bg-indigo-50 px-2.5 text-xs font-semibold text-indigo-700">
+        <Clock className="size-3.5" aria-hidden />
+        {label ?? 'Đang chờ gửi'}
+      </span>
+    );
+  }
   if (status === 'DONE') {
     return (
       <span className="inline-flex min-h-7 items-center gap-1 rounded-full bg-indigo-50 px-2.5 text-xs font-semibold text-green-ink">
@@ -276,72 +655,6 @@ export function StatusPill({
       <Clock className="size-3.5" aria-hidden />
       {label ?? 'Chờ trả'}
     </span>
-  );
-}
-
-/** Băng tổng chàm: 4 ô chia hairline, số Mono trắng, ô đầu gạch chân gold. */
-export function KpiBand({
-  items,
-}: {
-  items: Array<{ label: string; value: string; sub?: string }>;
-}) {
-  return (
-    <section
-      aria-label="Tổng quan tiền của sổ"
-      className="grid grid-cols-2 overflow-hidden rounded-xl bg-indigo-950 text-white lg:grid-cols-4"
-    >
-      {items.map((item, i) => (
-        <div
-          key={item.label}
-          className={cn(
-            'border-indigo-100/25 px-4 py-3.5',
-            i % 2 === 1 && 'border-l',
-            i >= 2 && 'border-t lg:border-t-0',
-            i > 0 && 'lg:border-l',
-          )}
-        >
-          <p className="text-xs font-medium text-indigo-100">{item.label}</p>
-          <p
-            className={cn(
-              'mt-1 font-mono text-xl font-semibold tabular-nums',
-              i === 0 && 'underline decoration-gold decoration-2 underline-offset-4',
-            )}
-          >
-            {item.value}
-          </p>
-          {item.sub ? <p className="mt-0.5 text-xs text-indigo-100">{item.sub}</p> : null}
-        </div>
-      ))}
-    </section>
-  );
-}
-
-/** Thanh dính đáy trong sổ/đám: tổng Mono + chip hàng chờ + nút hành động chính. */
-export function StickyActionBar({
-  totalLabel,
-  totalValue,
-  chip,
-  children,
-}: {
-  totalLabel: string;
-  totalValue: string;
-  chip?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <div
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-card shadow-[var(--shadow-lift)]"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-    >
-      <div className="mx-auto flex min-h-[52px] w-full max-w-6xl items-center gap-3 px-4 py-2 sm:px-6">
-        <div className="min-w-0">
-          <p className="text-xs text-muted">{totalLabel}</p>
-          <p className="truncate font-mono text-[15px] font-semibold tabular-nums">{totalValue}</p>
-        </div>
-        {chip}
-        <div className="ml-auto shrink-0">{children}</div>
-      </div>
-    </div>
   );
 }
 
@@ -540,5 +853,3 @@ export function Btn({
     </button>
   );
 }
-
-export { Home };

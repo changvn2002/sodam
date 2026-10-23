@@ -12,7 +12,7 @@
  */
 const KEY = 'sodam_books_v1';
 
-export type KnownBook = { id: string; inviteCode: string };
+export type KnownBook = { id: string; inviteCode: string; name?: string };
 
 function readAll(): KnownBook[] {
   if (typeof window === 'undefined') return [];
@@ -26,7 +26,8 @@ function readAll(): KnownBook[] {
         Boolean(b) &&
         typeof b === 'object' &&
         typeof (b as KnownBook).id === 'string' &&
-        typeof (b as KnownBook).inviteCode === 'string',
+        typeof (b as KnownBook).inviteCode === 'string' &&
+        ((b as KnownBook).name === undefined || typeof (b as KnownBook).name === 'string'),
     );
   } catch {
     return [];
@@ -43,10 +44,16 @@ function writeAll(books: KnownBook[]) {
   }
 }
 
-export function rememberBook(id: string, inviteCode: string) {
+export function rememberBook(id: string, inviteCode: string, name?: string) {
+  const existing = readAll().find((b) => b.id === id);
   const books = readAll().filter((b) => b.id !== id);
-  books.unshift({ id, inviteCode });
+  books.unshift({ id, inviteCode, name: name ?? existing?.name });
   writeAll(books.slice(0, 50));
+}
+
+/** Sổ đã biết trên máy này (id + mã + tên nếu có) — dùng cho bề mặt công khai khi offline. */
+export function knownBooks(): KnownBook[] {
+  return readAll();
 }
 
 export function forgetBook(id: string) {
