@@ -87,11 +87,13 @@ export function SharePanel({
       </span>
 
       {!revealed ? (
-        <span className="mt-3 flex gap-2">
-          <Btn variant="secondary" onClick={onClose}>
+        <span className="mt-3 flex flex-wrap gap-2">
+          <Btn variant="secondary" onClick={onClose} className="shrink-0 whitespace-nowrap">
             Quay lại
           </Btn>
-          <Btn onClick={() => setRevealed(true)}>Tôi hiểu, hiện nút chép link</Btn>
+          <Btn onClick={() => setRevealed(true)} className="whitespace-nowrap">
+            Tôi hiểu, hiện nút chép link
+          </Btn>
         </span>
       ) : (
         <span className="mt-3 block">

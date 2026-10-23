@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { SodamApi } from '../api';
 import type { SodamEntry, SodamEvent } from '../api/types';
 import { cn } from '@/lib/utils';
@@ -301,6 +301,7 @@ function EntryExpand({
     setPay(v);
   };
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleteDescId = useId();
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(entry.personName);
   const [editAmount, setEditAmount] = useState(String(entry.amountVnd));
@@ -543,11 +544,12 @@ function EntryExpand({
 
       {confirmDelete ? (
         <div
-          role="group"
+          role="alertdialog"
           aria-label="Xác nhận xoá khoản"
+          aria-describedby={deleteDescId}
           className="mt-3 rounded-[10px] border border-lacquer bg-card px-3 py-3"
         >
-          <p className="text-sm">
+          <p id={deleteDescId} className="text-sm">
             Xoá khoản <span className="font-mono font-semibold">{money(entry.amountVnd)}</span> của{' '}
             {entry.personName}? Khoản trả lễ gắn với khoản này cũng bị huỷ.
           </p>

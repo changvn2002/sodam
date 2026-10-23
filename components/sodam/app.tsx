@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createSodamApi, resolveSodamApiMode } from './api';
 import type { SodamBook, SodamDashboard, SodamEvent } from './api/types';
 import { knownBookCodes, rememberBook } from './lib/book-store';
+import { totalsTerms } from './lib/totals-strip';
 import { useSodamOffline } from './lib/offline';
 import { lexiconForKind } from './lib/lexicon';
 import { startRum } from './lib/rum';
@@ -437,7 +438,7 @@ export function SodamApp() {
               pendingLabel="Cần trả lễ"
               pendingValue={money(totals.pendingReturnVnd ?? 0)}
               pendingCount={dash?.openReturnCount ?? 0}
-              overGiven={(totals.overGivenVnd ?? 0) > 0 ? money(totals.overGivenVnd!) : null}
+              terms={totalsTerms(totals).map((t) => ({ label: t.label, value: money(t.valueVnd) }))}
             />
           ) : null
         }

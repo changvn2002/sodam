@@ -425,7 +425,15 @@ export function CommandBar({
 }
 
 /* ------------------------------------------------------------------ */
-/* Dải tổng của sổ: 4 số trung tính + 1 dòng công thức Mono.          */
+/* Dải tổng của sổ: 4 số trung tính + dòng phụ các hạng đã đi (mono). */
+/*                                                                    */
+/* TC-1 (Panel #04): dòng phụ KHÔNG còn là phương trình lấy đã nhận   */
+/* trừ đã đi ra số còn giữ — phương trình đó ghép 2 định nghĩa        */
+/* khác nhau dưới một dấu «=» ("còn giữ" chỉ trừ phần trả lễ trong     */
+/* khoản đã nhận) nên lệch đúng trả dư + đi đám. Nay dòng phụ là các   */
+/* hạng có nhãn riêng do lib/totals-strip.ts tính từ số thô: phần đã  */
+/* đi trong khoản đã nhận (= settledVnd) và phần trả dư + đi đám      */
+/* (= givenVnd − settledVnd); tổng hai hạng = tổng đã đi.             */
 /* ------------------------------------------------------------------ */
 
 export function TotalsStrip({
@@ -435,7 +443,7 @@ export function TotalsStrip({
   pendingLabel,
   pendingValue,
   pendingCount,
-  overGiven,
+  terms,
 }: {
   received: string;
   given: string;
@@ -443,7 +451,8 @@ export function TotalsStrip({
   pendingLabel: string;
   pendingValue: string;
   pendingCount: number;
-  overGiven?: string | null;
+  /** Các hạng đã format sẵn (nhãn + tiền) từ totalsTerms() ở app.tsx. */
+  terms?: Array<{ label: string; value: string }>;
 }) {
   const cells = [
     { label: 'Tổng đã nhận', value: received },
@@ -468,15 +477,19 @@ export function TotalsStrip({
           </p>
         ))}
       </div>
-      {/* Panel #02 mục 5: KHÔNG truncate — từng vế là một khối nowrap, dòng
-          công thức tự xuống dòng giữa các vế để con số kết luận "còn giữ"
-          luôn hiện trọn trên mobile 390px. */}
-      <p className="mt-0.5 flex flex-wrap gap-x-2 font-mono text-xs tabular-nums text-muted">
-        <span className="whitespace-nowrap">Đã nhận {received}</span>
-        <span className="whitespace-nowrap">− đã đi (đi đám + trả lễ) {given}</span>
-        <span className="whitespace-nowrap">= còn giữ {kept}</span>
-        {overGiven ? <span className="whitespace-nowrap">· đi nhiều hơn {overGiven}</span> : null}
-      </p>
+      {/* Panel #02 mục 5 giữ nguyên kỷ luật: KHÔNG truncate — từng hạng là
+          một khối nowrap, dòng phụ tự xuống dòng giữa các hạng để mọi con
+          số luôn hiện trọn trên mobile 390px. Hạng rỗng → không render. */}
+      {terms && terms.length > 0 ? (
+        <p className="mt-0.5 flex flex-wrap gap-x-2 font-mono text-xs tabular-nums text-muted">
+          {terms.map((t, i) => (
+            <span key={t.label} className="whitespace-nowrap">
+              {i > 0 ? '· ' : ''}
+              {t.label} {t.value}
+            </span>
+          ))}
+        </p>
+      ) : null}
     </section>
   );
 }

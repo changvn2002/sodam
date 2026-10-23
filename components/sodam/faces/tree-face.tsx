@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { SodamApi } from '../api';
 import type { SodamEventKind, SodamPerson, SodamRelation, SodamRelationType } from '../api/types';
 import { cn } from '@/lib/utils';
@@ -39,6 +39,7 @@ export function TreeFace({
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmRelId, setConfirmRelId] = useState<string | null>(null);
+  const deleteDescId = useId();
   const [relBusy, setRelBusy] = useState(false);
 
   const contextGroup = groupOfKind(contextKind);
@@ -261,11 +262,12 @@ export function TreeFace({
                 </div>
                 {confirmRelId === r.id ? (
                   <div
-                    role="group"
+                    role="alertdialog"
                     aria-label="Xác nhận xoá quan hệ"
+                    aria-describedby={deleteDescId}
                     className="mt-2 rounded-[10px] border border-lacquer bg-card px-3 py-3"
                   >
-                    <p className="text-sm">
+                    <p id={deleteDescId} className="text-sm">
                       Xoá quan hệ {RELATION_LABELS[r.type] ?? r.type} giữa {nameOf(r.fromPersonId)}{' '}
                       và {nameOf(r.toPersonId)}? Cây họ sẽ không còn nối hai người này — các khoản
                       lễ trong sổ không thay đổi.

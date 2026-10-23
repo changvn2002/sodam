@@ -9,6 +9,30 @@ phát hành gắn tag `vX.Y.Z` lên đúng commit đang chạy production và gh
 một dòng vào bảng cặp ở cuối file này: phiên bản → commit SHA → ngày
 deploy. "Về bản vX.Y.Z" khi rollback nghĩa là về commit của tag đó.
 
+## [1.2.0] — sửa 2 MEDIUM của Panel #04 (TC-1 + F-R4-1)
+
+Phát hành ngày 2026-10-24, tag v1.2.0 — xem bảng cặp ở cuối file.
+
+- **TC-1 (MEDIUM, độ tin cậy):** dòng công thức của dải tổng (TotalsStrip)
+  trước đây viết dạng phương trình «Đã nhận − đã đi = còn giữ» nhưng
+  lệch đúng bằng (đi đám + trả dư) ở mọi trạng thái có đi đám hoặc trả
+  dư. Nay bỏ dạng phương trình: hai hạng có nhãn qua hàm thuần
+  `totalsTerms()` (`components/sodam/lib/totals-strip.ts`) — «Đã đi
+  trong khoản đã nhận {S}» và «Trả dư + đi đám {G − S}» — tổng hai
+  hạng luôn bằng tổng đã đi; bốn ô số gốc (đã nhận / đã đi / còn giữ /
+  chờ trả) không đổi, số neo của panel giữ nguyên từng đồng. 14 test
+  mới khoá 4 hình trạng + neo + dose-response.
+- **F-R4-1 (MEDIUM):** tên người ở mặt Người không còn bị cắt ellipsis
+  — chuyển sang xuống dòng như hàng sổ ở mặt đám (đo pixel độc lập:
+  tên 49 ký tự hiện đủ 147/147px ở khổ 390px); hai người cùng tiền tố
+  «Nguyễn Thị Phương…» nay phân biệt được.
+- **Gói MINOR cùng họ:** dòng phụ + dòng trạng thái của hàng Người bỏ
+  cắt chữ (đuôi tiền hiện trọn); cả hai hộp xác nhận xoá dùng
+  `role="alertdialog"` + `aria-describedby` trỏ đoạn hệ quả; tên sổ ở
+  trang chủ xuống dòng thay vì ellipsis; nút «Quay lại» ở SharePanel
+  không còn xuống 2 dòng.
+- Suite 161/161 (21 file); bundle 184.867 B gzip / trần 200.000 B.
+
 ## [1.1.1] — hotfix bảo mật dependency (SEC-10)
 
 Phát hành ngày 2026-10-24, tag v1.1.1 — xem bảng cặp ở cuối file.

@@ -101,15 +101,15 @@ export function PeopleFace({
               >
                 <PersonAvatar name={r.person.displayName} seed={r.person.id} size="md" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[15px] font-medium">
+                  <span className="block text-[15px] leading-snug font-medium [overflow-wrap:anywhere]">
                     {r.person.displayName}
                   </span>
-                  <span className="mt-0.5 block truncate text-xs text-muted">
+                  <span className="mt-0.5 block text-xs leading-snug text-muted">
                     {r.history.length} khoản qua lại
                     {r.latestEventTitle ? ` · Đám gần nhất: ${r.latestEventTitle}` : ''}
                   </span>
                   {r.returnState !== 'none' ? (
-                    <span className="mt-0.5 block truncate text-xs font-medium text-muted">
+                    <span className="mt-0.5 block text-xs leading-snug font-medium text-muted">
                       Trả lễ: {returnStateLabel(r.returnState)}
                       {r.returnedPaid > 0 ? ` · đã trả ${money(r.returnedPaid)}` : ''}
                       {r.pendingReturn > 0 ? ` · còn chờ ${money(r.pendingReturn)}` : ''}

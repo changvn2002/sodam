@@ -227,7 +227,7 @@ export function HomeView({
                   >
                     <BookAvatar name={b.name} size="md" />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[15px] font-medium text-ink">
+                      <span className="block text-[15px] leading-snug font-medium [overflow-wrap:anywhere] text-ink">
                         {b.name}
                       </span>
                       <span className="mt-0.5 block font-mono text-xs tabular-nums text-muted">
