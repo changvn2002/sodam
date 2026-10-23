@@ -171,6 +171,7 @@ tag v1.1.0 — xem bảng cặp ở cuối file.
 
 | Phiên bản | Commit | Ngày deploy | Ghi chú |
 |---|---|---|---|
+| 1.2.0 | `989a610` | 2026-10-24 | Sửa TC-1 + F-R4-1 + gói MINOR của Panel #04; tag v1.2.0 tại commit này (chỉ bổ sung dòng bảng) |
 | 1.1.1 | `bc1635b` | 2026-10-24 | Hotfix SEC-10 (next 16.4.2 + deepmerge-ts ^8); CI xanh cả audit; tag v1.1.1 tại commit kế tiếp (chỉ bổ sung dòng này) |
 | 1.1.0 | `cc1c42b` | 2026-10-24 | Tag v1.1.0 gắn tại commit kế tiếp (chỉ bổ sung dòng này) |
 | 1.0.0 | `bddb9c4` | 2026-10-23 | Đã gắn tag v1.0.0 |
