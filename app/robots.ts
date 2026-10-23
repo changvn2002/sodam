@@ -7,8 +7,8 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
-        // App data is behind login; keep auth/API surfaces out of the index.
-        disallow: ['/api/', '/login'],
+        // Book data is only reachable with an invite code; keep the API out.
+        disallow: ['/api/'],
       },
     ],
     sitemap: `${siteUrl()}/sitemap.xml`,

@@ -1,8 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { createSodamApi, resolveSodamApiMode, type SodamApi } from './api';
 import type {
   SodamBook,
@@ -18,8 +16,8 @@ import type {
   SodamRelationType,
   SodamReturnItem,
 } from './api/types';
-import { clearToken, loadToken } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { knownBookCodes, rememberBook } from './lib/book-store';
 import { useSodamOffline } from './lib/offline';
 import { EVENT_KIND_LABELS, EVENT_KIND_ORDER, kindLabel } from './lib/event-kinds';
 import { formatLunarVi, solarToLunar } from './lib/lunar';
@@ -44,7 +42,6 @@ import {
   BookMarked,
   Gift,
   HandCoins,
-  LogOut,
   Users as UsersLucide,
   ArrowRight,
 } from 'lucide-react';
@@ -178,34 +175,55 @@ function navFromView(view: View): SodamNavId {
 }
 
 export function SodamApp() {
-  const router = useRouter();
   const api = useMemo(() => createSodamApi(), []);
   const mode = resolveSodamApiMode();
-  const [tokenReady, setTokenReady] = useState(mode === 'mock');
   const [view, setView] = useState<View>({ name: 'home' });
   const [books, setBooks] = useState<SodamBook[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [aiBlocked, setAiBlocked] = useState(false);
   const { online, enqueue, flush } = useSodamOffline(api);
+  const joinFromLinkTried = useRef(false);
 
-  useEffect(() => {
-    if (mode === 'mock') return;
-    setTokenReady(Boolean(loadToken()));
-  }, [mode]);
-
+  // No accounts: "my books" are resolved from the invite codes this device
+  // has stored (created or joined here). See lib/book-store.
   const refreshBooks = useCallback(async () => {
     try {
-      setBooks(await api.listBooks());
+      const list = await api.listBooks(mode === 'mock' ? [] : knownBookCodes());
+      setBooks(list);
+      // Keep the local registry in sync with what the server still knows.
+      for (const b of list) rememberBook(b.id, b.inviteCode);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Lỗi tải sổ');
     }
-  }, [api]);
+  }, [api, mode]);
 
   useEffect(() => {
-    if (!tokenReady && mode !== 'mock') return;
     void refreshBooks();
-  }, [tokenReady, mode, refreshBooks]);
+  }, [refreshBooks]);
+
+  // Share link (?code=XXXX): opening it joins the book and goes straight in —
+  // that is the whole "invite" flow now that there are no accounts.
+  useEffect(() => {
+    if (joinFromLinkTried.current) return;
+    joinFromLinkTried.current = true;
+    const code = new URLSearchParams(window.location.search).get('code')?.trim();
+    if (!code) return;
+    void (async () => {
+      try {
+        const book = await api.joinBook(code);
+        rememberBook(book.id, book.inviteCode);
+        await refreshBooks();
+        setView({ name: 'dashboard', bookId: book.id });
+      } catch {
+        setError('Mã sổ trong liên kết không đúng hoặc sổ đã bị xoá.');
+      } finally {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('code');
+        window.history.replaceState(null, '', url.toString());
+      }
+    })();
+  }, [api, refreshBooks]);
 
   useEffect(() => {
     if (online && view.name === 'dashboard') void flush(view.bookId);
@@ -226,50 +244,6 @@ export function SodamApp() {
     if (id === 'tree') setView({ name: 'tree', bookId });
   };
 
-  const handleLogout = useCallback(() => {
-    clearToken();
-    router.push('/login');
-    router.refresh();
-  }, [router]);
-
-  if (!tokenReady && mode !== 'mock') {
-    return (
-      <div className="flex min-h-dvh flex-col items-center justify-center px-4">
-        <div
-          className="pointer-events-none fixed inset-0 -z-10"
-          aria-hidden
-          style={{
-            background:
-              'radial-gradient(900px 420px at 20% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 55%), var(--paper)',
-          }}
-        />
-        <div className="w-full max-w-md rounded-2xl border border-line bg-card p-6 shadow-[0_1px_0_rgba(16,20,24,0.04)] sm:p-8">
-          <p className="text-[11px] font-semibold tracking-[0.16em] text-accent uppercase">
-            Sổ Đám
-          </p>
-          <h1 className="font-display mt-2 text-2xl font-semibold tracking-tight text-ink">
-            Đăng nhập để mở sổ
-          </h1>
-          <p className="mt-2 text-sm leading-relaxed text-muted">
-            Sổ nhận lễ / trả lễ gắn với tài khoản của bạn — dữ liệu tiền mừng không công khai.
-          </p>
-          <Link
-            href="/login"
-            className="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-jade-deep px-4 text-sm font-medium text-[#FAF6EF] shadow-[var(--shadow-card)] transition-colors hover:bg-jade-deep/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-          >
-            Đăng nhập
-          </Link>
-          <Link
-            href="/login?register=1"
-            className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-line px-4 text-sm text-muted transition-colors hover:bg-paper hover:text-ink"
-          >
-            Tạo tài khoản mới
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <SodamShell
       title="Sổ Đám"
@@ -283,18 +257,6 @@ export function SodamApp() {
       onNav={onNav}
       showBookNav={showBookNav}
       onBackHome={() => setView({ name: 'home' })}
-      headerAction={
-        mode === 'mock' ? undefined : (
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 text-sm text-[#FAF6EF]/85 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-          >
-            <LogOut className="size-4" />
-            Đăng xuất
-          </button>
-        )
-      }
     >
       {view.name === 'home' ? (
         <HomeView
@@ -307,7 +269,7 @@ export function SodamApp() {
           onJoin={async (code) => {
             const trimmed = code.trim();
             if (trimmed.length < 3) {
-              setError('Nhập mã mời ít nhất 3 ký tự (mã trên sổ của người khác).');
+              setError('Nhập mã sổ ít nhất 3 ký tự (mã trên sổ của người nhà).');
               return;
             }
             const book = await api.joinBook(trimmed);
@@ -463,10 +425,7 @@ function HomeView({
                       {b.name}
                     </span>
                     <span className="mt-0.5 block font-mono text-[11px] tracking-wide text-muted">
-                      Mã mời {b.inviteCode}
-                    </span>
-                    <span className="mt-1.5 inline-flex rounded-full bg-gold-soft px-2 py-0.5 text-[11px] font-semibold text-[#7A5A14]">
-                      {b.myRole}
+                      Mã sổ {b.inviteCode}
                     </span>
                   </span>
                   <ArrowRight className="size-5 shrink-0 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-jade-deep" />
@@ -500,14 +459,17 @@ function HomeView({
           </div>
         </Panel>
 
-        <Panel title="Vào sổ bằng mã" description="Người nhà đã tạo sổ? Nhập mã mời để ghi chung.">
+        <Panel
+          title="Vào sổ bằng mã"
+          description="Người nhà đã tạo sổ? Nhập mã sổ để ghi chung — hoặc mở link chia sẻ là vào thẳng."
+        >
           <div className="flex flex-col gap-3 sm:flex-row">
             <div className="flex-1">
-              <Field label="Mã mời">
+              <Field label="Mã sổ">
                 <Input
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
-                  placeholder="VD: A1B2C3"
+                  placeholder="VD: A1B2C3D4E5F6"
                   className="uppercase"
                   autoComplete="off"
                 />

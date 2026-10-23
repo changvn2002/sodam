@@ -36,7 +36,6 @@ function createStore(): Store {
     inviteCode: 'DEMO01',
     createdAt: now(),
     updatedAt: now(),
-    myRole: 'OWNER',
   };
   return {
     books: [book],
@@ -61,7 +60,9 @@ export function createMockSodamApi(): SodamApi {
       return { product: { name: 'Sổ Đám', slug: 'sodam' }, aiConfigured: true };
     },
     async listBooks() {
-      return store.books.map((b) => ({ ...b, myRole: b.myRole ?? 'OWNER' }));
+      // Mock data lives in this tab's memory — the codes argument only
+      // matters for the HTTP layer, which resolves codes server-side.
+      return store.books.map((b) => ({ ...b }));
     },
     async createBook(name) {
       const book: SodamBook = {
@@ -70,7 +71,6 @@ export function createMockSodamApi(): SodamApi {
         inviteCode: id('inv').slice(-6).toUpperCase(),
         createdAt: now(),
         updatedAt: now(),
-        myRole: 'OWNER',
       };
       store.books.push(book);
       return book;
@@ -78,7 +78,7 @@ export function createMockSodamApi(): SodamApi {
     async joinBook(inviteCode) {
       const book = store.books.find((b) => b.inviteCode === inviteCode);
       if (!book) throw new Error('Không tìm thấy sổ.');
-      return { ...book, myRole: 'EDITOR' };
+      return { ...book };
     },
     async dashboard(bookId) {
       const book = mustBook(bookId);

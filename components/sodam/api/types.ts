@@ -1,6 +1,5 @@
 /** Stable contract for live HTTP and mock demo — keep in sync with server DTOs. */
 
-export type SodamMemberRole = 'OWNER' | 'EDITOR' | 'VIEWER';
 export type SodamEventKind =
   | 'CUOI'
   | 'DAM_HOI'
@@ -27,7 +26,6 @@ export type SodamBook = {
   inviteCode: string;
   createdAt: string;
   updatedAt: string;
-  myRole?: SodamMemberRole;
 };
 
 export type SodamPerson = {
@@ -147,7 +145,8 @@ export type SodamSyncMutation = {
 
 export type SodamApi = {
   status: () => Promise<{ product: { name: string; slug: string }; aiConfigured: boolean }>;
-  listBooks: () => Promise<SodamBook[]>;
+  /** Resolve the books whose invite codes this device holds (no accounts). */
+  listBooks: (codes: string[]) => Promise<SodamBook[]>;
   createBook: (name: string) => Promise<SodamBook>;
   joinBook: (inviteCode: string) => Promise<SodamBook>;
   dashboard: (bookId: string) => Promise<SodamDashboard>;

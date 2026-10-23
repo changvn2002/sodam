@@ -1,9 +1,10 @@
 // Sổ Đám — standalone schema.
-// Ported 1:1 from the host monorepo's `server/prisma/sodam.prisma.fragment`
-// (same models, same enums), plus a minimal built-in `User` model so the
-// standalone ships with its own JWT auth instead of the host's account system.
-// `SodamBookMember.userId` pointed at the host's User table there; here it
-// resolves to the local User model below.
+// Ported from the host monorepo's `server/prisma/sodam.prisma.fragment`
+// (same business models, same enums). There are NO user accounts: the app is
+// no-login. A book is protected only by its `inviteCode` — a high-entropy
+// code generated server-side (see lib/server/invite-code.ts). Whoever holds
+// the code (or a share link containing it) can open and write to the book,
+// which is how family members keep a shared ledger without accounts.
 
 generator client {
   provider = "prisma-client-js"
@@ -12,23 +13,6 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-}
-
-/// Minimal account for the built-in auth (register/login → JWT bearer token).
-model User {
-  id           String            @id @default(cuid())
-  email        String            @unique
-  name         String            @default("")
-  passwordHash String
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  memberships  SodamBookMember[]
-}
-
-enum SodamMemberRole {
-  OWNER
-  EDITOR
-  VIEWER
 }
 
 enum SodamEventKind {
@@ -83,24 +67,9 @@ model SodamBook {
   inviteCode String            @unique
   createdAt  DateTime          @default(now())
   updatedAt  DateTime          @updatedAt
-  members    SodamBookMember[]
   people     SodamPerson[]
   events     SodamEvent[]
   returns    SodamReturnItem[]
-}
-
-model SodamBookMember {
-  id        String          @id @default(cuid())
-  bookId    String
-  book      SodamBook       @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      SodamMemberRole @default(EDITOR)
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-
-  @@unique([bookId, userId])
-  @@index([userId])
 }
 
 model SodamPerson {

@@ -3,86 +3,75 @@ import type {
   SodamEntrySource,
   SodamEventKind,
   SodamEventRole,
-  SodamMemberRole,
   SodamRelationType,
   SodamReturnStatus,
 } from '@prisma/client';
 import { prisma } from './prisma';
-import { forbidden, notFound } from './errors';
+import { notFound } from './errors';
+import { generateInviteCode, inviteCodesMatch, normalizeInviteCode } from './invite-code';
 import { sodamEventKindLabelVi } from './sodam-event-kinds';
 
 /**
  * Port of the host's NestJS `SodamService` (server/src/products/sodam/sodam.service.ts).
  * Business logic is unchanged; Nest exceptions became HttpError and the
  * injected PrismaService became the standalone Prisma client.
+ *
+ * Access model (no-login): there are no accounts. Every book-scoped function
+ * takes the book's invite code — presented by the client from its local
+ * registry — and `requireBookAccess` verifies it before any data is touched.
+ * A wrong/missing code answers 404 "Book not found", exactly like a book
+ * that does not exist, so codes cannot be probed by book id.
  */
 
 type Tx = Prisma.TransactionClient;
 
-function inviteCode() {
-  return Math.random().toString(36).slice(2, 8).toUpperCase();
-}
-
-export async function requireMember(
-  bookId: string,
-  userId: string,
-  minRole: SodamMemberRole = 'VIEWER',
-) {
-  const member = await prisma.sodamBookMember.findUnique({
-    where: { bookId_userId: { bookId, userId } },
-  });
-  if (!member) throw notFound('Book not found');
-  const rank = { VIEWER: 1, EDITOR: 2, OWNER: 3 } as const;
-  if (rank[member.role] < rank[minRole]) {
-    throw forbidden('Insufficient book role');
-  }
-  return member;
-}
-
-export function listBooks(userId: string) {
-  return prisma.sodamBookMember
-    .findMany({
-      where: { userId },
-      take: 50,
-      include: { book: true },
-      orderBy: { updatedAt: 'desc' },
-    })
-    .then((rows) =>
-      rows.map((r) => ({
-        ...r.book,
-        myRole: r.role,
-        inviteCode: r.book.inviteCode,
-      })),
-    );
-}
-
-export async function createBook(userId: string, name: string) {
-  return prisma.$transaction(async (tx) => {
-    const book = await tx.sodamBook.create({
-      data: { name: name.trim(), inviteCode: inviteCode() },
-    });
-    await tx.sodamBookMember.create({
-      data: { bookId: book.id, userId, role: 'OWNER' },
-    });
-    return { ...book, myRole: 'OWNER' as const };
-  });
-}
-
-export async function joinBook(userId: string, code: string) {
+export async function requireBookAccess(bookId: string, code: string) {
   const book = await prisma.sodamBook.findUnique({
-    where: { inviteCode: code.trim().toUpperCase() },
+    where: { id: bookId },
+    select: { id: true, inviteCode: true },
+  });
+  if (!book || !inviteCodesMatch(code, book.inviteCode)) {
+    throw notFound('Book not found');
+  }
+  return book;
+}
+
+/**
+ * "My books" without accounts: the client keeps the codes of the books it
+ * created or joined on this device and sends them here to resolve the list.
+ */
+export async function listBooksByCodes(codes: string[]) {
+  const normalized = [...new Set(codes.map(normalizeInviteCode).filter(Boolean))].slice(0, 50);
+  if (normalized.length === 0) return [];
+  return prisma.sodamBook.findMany({
+    where: { inviteCode: { in: normalized } },
+    orderBy: { updatedAt: 'desc' },
+    take: 50,
+  });
+}
+
+export async function createBook(name: string) {
+  // Codes are random; retry a few times on the (astronomically unlikely)
+  // unique collision instead of failing the create.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code = generateInviteCode();
+    const existing = await prisma.sodamBook.findUnique({ where: { inviteCode: code } });
+    if (existing) continue;
+    return prisma.sodamBook.create({ data: { name: name.trim(), inviteCode: code } });
+  }
+  throw new Error('Could not allocate a unique invite code');
+}
+
+export async function joinBook(code: string) {
+  const book = await prisma.sodamBook.findUnique({
+    where: { inviteCode: normalizeInviteCode(code) },
   });
   if (!book) throw notFound('Invite code not found');
-  const member = await prisma.sodamBookMember.upsert({
-    where: { bookId_userId: { bookId: book.id, userId } },
-    create: { bookId: book.id, userId, role: 'EDITOR' },
-    update: {},
-  });
-  return { ...book, myRole: member.role };
+  return book;
 }
 
-export async function dashboard(bookId: string, userId: string) {
-  const member = await requireMember(bookId, userId);
+export async function dashboard(bookId: string, code: string) {
+  await requireBookAccess(bookId, code);
   const book = await prisma.sodamBook.findUniqueOrThrow({ where: { id: bookId } });
   const [openEvent, openReturns, recentEvents, peopleCount, hostedAgg, attendedAgg, doneReturns] =
     await Promise.all([
@@ -131,7 +120,7 @@ export async function dashboard(bookId: string, userId: string) {
   const recentWithTotals = await attachEventTotals(recentEvents);
 
   return {
-    book: { ...book, myRole: member.role },
+    book,
     openEvent: openEvent ? (await attachEventTotals([openEvent]))[0] : null,
     openReturnCount: openReturns.length,
     recentEvents: recentWithTotals,
@@ -155,8 +144,8 @@ export async function dashboard(bookId: string, userId: string) {
   };
 }
 
-export async function listEvents(bookId: string, userId: string) {
-  await requireMember(bookId, userId);
+export async function listEvents(bookId: string, code: string) {
+  await requireBookAccess(bookId, code);
   const events = await prisma.sodamEvent.findMany({
     where: { bookId },
     orderBy: { occurredOn: 'desc' },
@@ -167,7 +156,7 @@ export async function listEvents(bookId: string, userId: string) {
 
 export async function createEvent(
   bookId: string,
-  userId: string,
+  code: string,
   input: {
     title: string;
     kind: SodamEventKind;
@@ -176,7 +165,7 @@ export async function createEvent(
     note?: string;
   },
 ) {
-  await requireMember(bookId, userId, 'EDITOR');
+  await requireBookAccess(bookId, code);
   return prisma.sodamEvent.create({
     data: {
       bookId,
@@ -189,8 +178,8 @@ export async function createEvent(
   });
 }
 
-export async function getEvent(bookId: string, eventId: string, userId: string) {
-  await requireMember(bookId, userId);
+export async function getEvent(bookId: string, eventId: string, code: string) {
+  await requireBookAccess(bookId, code);
   const event = await prisma.sodamEvent.findFirst({
     where: { id: eventId, bookId },
   });
@@ -235,8 +224,8 @@ export async function getEvent(bookId: string, eventId: string, userId: string) 
   };
 }
 
-export async function closeEvent(bookId: string, eventId: string, userId: string) {
-  await requireMember(bookId, userId, 'EDITOR');
+export async function closeEvent(bookId: string, eventId: string, code: string) {
+  await requireBookAccess(bookId, code);
   const event = await prisma.sodamEvent.findFirst({ where: { id: eventId, bookId } });
   if (!event) throw notFound('Event not found');
   return prisma.sodamEvent.update({
@@ -248,7 +237,7 @@ export async function closeEvent(bookId: string, eventId: string, userId: string
 export async function createEntry(
   bookId: string,
   eventId: string,
-  userId: string,
+  code: string,
   input: {
     personName: string;
     amountVnd: number;
@@ -258,7 +247,7 @@ export async function createEntry(
     clientMutationId?: string;
   },
 ) {
-  await requireMember(bookId, userId, 'EDITOR');
+  await requireBookAccess(bookId, code);
   const event = await prisma.sodamEvent.findFirst({ where: { id: eventId, bookId } });
   if (!event) throw notFound('Event not found');
 
@@ -294,10 +283,10 @@ export async function updateEntry(
   bookId: string,
   eventId: string,
   entryId: string,
-  userId: string,
+  code: string,
   input: Partial<{ personName: string; amountVnd: number; note: string }>,
 ) {
-  await requireMember(bookId, userId, 'EDITOR');
+  await requireBookAccess(bookId, code);
   const entry = await prisma.sodamEntry.findFirst({
     where: { id: entryId, eventId, event: { bookId } },
     include: { event: true },
@@ -328,13 +317,8 @@ export async function updateEntry(
   return updated;
 }
 
-export async function deleteEntry(
-  bookId: string,
-  eventId: string,
-  entryId: string,
-  userId: string,
-) {
-  await requireMember(bookId, userId, 'EDITOR');
+export async function deleteEntry(bookId: string, eventId: string, entryId: string, code: string) {
+  await requireBookAccess(bookId, code);
   const entry = await prisma.sodamEntry.findFirst({
     where: { id: entryId, eventId, event: { bookId } },
     include: { event: true },
@@ -352,13 +336,13 @@ export async function deleteEntry(
 export async function batchEntries(
   bookId: string,
   eventId: string,
-  userId: string,
+  code: string,
   rows: Array<{ personName: string; amountVnd: number }>,
 ) {
   const out = [];
   for (const row of rows.slice(0, 100)) {
     out.push(
-      await createEntry(bookId, eventId, userId, {
+      await createEntry(bookId, eventId, code, {
         personName: row.personName,
         amountVnd: row.amountVnd,
         source: 'PHOTO',
@@ -368,8 +352,8 @@ export async function batchEntries(
   return out;
 }
 
-export async function listPeople(bookId: string, userId: string) {
-  await requireMember(bookId, userId);
+export async function listPeople(bookId: string, code: string) {
+  await requireBookAccess(bookId, code);
   return prisma.sodamPerson.findMany({
     where: { bookId },
     orderBy: { displayName: 'asc' },
@@ -377,8 +361,8 @@ export async function listPeople(bookId: string, userId: string) {
   });
 }
 
-export async function searchPeople(bookId: string, userId: string, q: string) {
-  await requireMember(bookId, userId);
+export async function searchPeople(bookId: string, code: string, q: string) {
+  await requireBookAccess(bookId, code);
   const people = await prisma.sodamPerson.findMany({
     where: {
       bookId,
@@ -400,10 +384,10 @@ export async function searchPeople(bookId: string, userId: string, q: string) {
 
 export async function upsertPerson(
   bookId: string,
-  userId: string,
+  code: string,
   input: { id?: string; displayName: string; note?: string },
 ) {
-  await requireMember(bookId, userId, 'EDITOR');
+  await requireBookAccess(bookId, code);
   if (input.id) {
     const person = await prisma.sodamPerson.findFirst({
       where: { id: input.id, bookId },
@@ -420,8 +404,8 @@ export async function upsertPerson(
   return prisma.$transaction((tx) => ensurePersonTx(tx, bookId, input.displayName, input.note));
 }
 
-export async function listRelations(bookId: string, userId: string) {
-  await requireMember(bookId, userId);
+export async function listRelations(bookId: string, code: string) {
+  await requireBookAccess(bookId, code);
   const people = await prisma.sodamPerson.findMany({
     where: { bookId },
     select: { id: true },
@@ -436,10 +420,10 @@ export async function listRelations(bookId: string, userId: string) {
 
 export async function createRelation(
   bookId: string,
-  userId: string,
+  code: string,
   input: { fromPersonId: string; toPersonId: string; type: SodamRelationType },
 ) {
-  await requireMember(bookId, userId, 'EDITOR');
+  await requireBookAccess(bookId, code);
   const [from, to] = await Promise.all([
     prisma.sodamPerson.findFirst({ where: { id: input.fromPersonId, bookId } }),
     prisma.sodamPerson.findFirst({ where: { id: input.toPersonId, bookId } }),
@@ -454,16 +438,16 @@ export async function createRelation(
   });
 }
 
-export async function tree(bookId: string, userId: string) {
+export async function tree(bookId: string, code: string) {
   const [people, relations] = await Promise.all([
-    listPeople(bookId, userId),
-    listRelations(bookId, userId),
+    listPeople(bookId, code),
+    listRelations(bookId, code),
   ]);
   return { people, relations };
 }
 
-export async function listReturns(bookId: string, userId: string, status?: SodamReturnStatus) {
-  await requireMember(bookId, userId);
+export async function listReturns(bookId: string, code: string, status?: SodamReturnStatus) {
+  await requireBookAccess(bookId, code);
   const rows = await prisma.sodamReturnItem.findMany({
     where: { bookId, ...(status ? { status } : {}) },
     include: { person: true, fromEvent: true },
@@ -487,10 +471,10 @@ export async function listReturns(bookId: string, userId: string, status?: Sodam
 export async function markReturn(
   bookId: string,
   returnId: string,
-  userId: string,
+  code: string,
   input: { status: 'DONE' | 'SKIPPED'; amountVnd?: number },
 ) {
-  await requireMember(bookId, userId, 'EDITOR');
+  await requireBookAccess(bookId, code);
   const item = await prisma.sodamReturnItem.findFirst({
     where: { id: returnId, bookId },
     include: { person: true },
@@ -519,8 +503,8 @@ export async function markReturn(
   };
 }
 
-export async function exportCsv(bookId: string, userId: string) {
-  await requireMember(bookId, userId);
+export async function exportCsv(bookId: string, code: string) {
+  await requireBookAccess(bookId, code);
   const events = await prisma.sodamEvent.findMany({
     where: { bookId },
     take: 50,
@@ -546,14 +530,14 @@ export async function exportCsv(bookId: string, userId: string) {
   return { csv: lines.join('\n') };
 }
 
-export async function importCsv(bookId: string, userId: string, csv: string) {
-  await requireMember(bookId, userId, 'EDITOR');
+export async function importCsv(bookId: string, code: string, csv: string) {
+  await requireBookAccess(bookId, code);
   let event = await prisma.sodamEvent.findFirst({
     where: { bookId, status: 'OPEN' },
     orderBy: { updatedAt: 'desc' },
   });
   if (!event) {
-    event = await createEvent(bookId, userId, {
+    event = await createEvent(bookId, code, {
       title: 'Import CSV',
       kind: 'KHAC',
       role: 'HOSTED',
@@ -567,7 +551,7 @@ export async function importCsv(bookId: string, userId: string, csv: string) {
     const personName = cols[2] ?? '';
     const amountVnd = Number(cols[3]);
     if (!personName || !Number.isFinite(amountVnd)) continue;
-    await createEntry(bookId, event.id, userId, {
+    await createEntry(bookId, event.id, code, {
       personName,
       amountVnd,
       source: 'MANUAL',
@@ -584,10 +568,10 @@ export async function importCsv(bookId: string, userId: string, csv: string) {
  */
 export async function sync(
   bookId: string,
-  userId: string,
+  code: string,
   mutations: Array<{ clientMutationId: string; type: string; payload: Record<string, unknown> }>,
 ) {
-  await requireMember(bookId, userId, 'EDITOR');
+  await requireBookAccess(bookId, code);
   const applied: string[] = [];
   for (const m of mutations.slice(0, 50)) {
     const seen = await prisma.sodamSyncCursor.findUnique({
@@ -598,7 +582,7 @@ export async function sync(
       continue;
     }
     if (m.type === 'createEntry' && m.payload.eventId && m.payload.personName != null) {
-      await createEntry(bookId, String(m.payload.eventId), userId, {
+      await createEntry(bookId, String(m.payload.eventId), code, {
         personName: String(m.payload.personName),
         amountVnd: Number(m.payload.amountVnd ?? 0),
         source: (m.payload.source as SodamEntrySource) ?? 'MANUAL',

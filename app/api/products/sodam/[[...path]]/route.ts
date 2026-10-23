@@ -5,7 +5,6 @@ import type {
   SodamRelationType,
 } from '@prisma/client';
 import * as ai from '@/lib/server/ai.service';
-import { requireUser } from '@/lib/server/auth';
 import { badRequest, notFound } from '@/lib/server/errors';
 import {
   handle,
@@ -23,8 +22,10 @@ import { SODAM_EVENT_KINDS } from '@/lib/server/sodam-event-kinds';
 /**
  * Route handlers replacing the host's NestJS `SodamController`
  * (server/src/products/sodam/sodam.controller.ts). Same paths, same payloads,
- * same response shapes — every product endpoint requires the built-in JWT
- * auth (the standalone equivalent of the host's JwtAuthGuard).
+ * same response shapes. No accounts: book-scoped endpoints authorize with
+ * the book's invite code, sent by the client in the `x-book-code` header
+ * (see lib/server/invite-code.ts). A wrong code answers 404, like the
+ * host's membership guard did for non-members.
  */
 
 const EVENT_ROLES = ['HOSTED', 'ATTENDED'] as const;
@@ -45,36 +46,44 @@ async function dispatch(req: Request, segments: string[]) {
 
   if (head !== 'books') throw notFound('Route not found');
 
-  const { id: userId } = await requireUser(req);
-
-  // /books
-  if (segments.length === 1) {
-    if (method === 'GET') return sodam.listBooks(userId);
-    if (method === 'POST') {
-      const body = await readJson(req);
-      return sodam.createBook(userId, reqString(body, 'name'));
-    }
-  }
-
-  // /books/join
-  if (segments.length === 2 && sub === 'join' && method === 'POST') {
+  // /books — create a new book (no credential needed: creating grants one)
+  if (segments.length === 1 && method === 'POST') {
     const body = await readJson(req);
-    return sodam.joinBook(userId, reqString(body, 'inviteCode', 3));
+    return sodam.createBook(reqString(body, 'name'));
   }
+
+  // /books/mine — resolve the books this device knows, by their codes.
+  // NOTE: for 2-segment paths the second segment sits in `bookId`, not `sub`.
+  if (segments.length === 2 && bookId === 'mine' && method === 'POST') {
+    const body = await readJson(req);
+    const codes = Array.isArray(body.codes)
+      ? body.codes.filter((c): c is string => typeof c === 'string')
+      : [];
+    return sodam.listBooksByCodes(codes);
+  }
+
+  // /books/join — open a book by its invite code
+  if (segments.length === 2 && bookId === 'join' && method === 'POST') {
+    const body = await readJson(req);
+    return sodam.joinBook(reqString(body, 'inviteCode', 3));
+  }
+
+  // Every route below is scoped to one book: the invite code is the key.
+  const code = req.headers.get('x-book-code') ?? '';
 
   if (!bookId) throw notFound('Route not found');
 
   // /books/:bookId/dashboard
   if (segments.length === 3 && sub === 'dashboard' && method === 'GET') {
-    return sodam.dashboard(bookId, userId);
+    return sodam.dashboard(bookId, code);
   }
 
   // /books/:bookId/events
   if (segments.length === 3 && sub === 'events') {
-    if (method === 'GET') return sodam.listEvents(bookId, userId);
+    if (method === 'GET') return sodam.listEvents(bookId, code);
     if (method === 'POST') {
       const body = await readJson(req);
-      return sodam.createEvent(bookId, userId, {
+      return sodam.createEvent(bookId, code, {
         title: reqString(body, 'title'),
         kind: reqEnum<SodamEventKind>(body, 'kind', SODAM_EVENT_KINDS),
         role: reqEnum<SodamEventRole>(body, 'role', EVENT_ROLES),
@@ -88,14 +97,14 @@ async function dispatch(req: Request, segments: string[]) {
   if (segments.length >= 4 && sub === 'events') {
     const eventId = third;
     if (segments.length === 4 && method === 'GET') {
-      return sodam.getEvent(bookId, eventId, userId);
+      return sodam.getEvent(bookId, eventId, code);
     }
     if (segments.length === 5 && fourth === 'close' && method === 'POST') {
-      return sodam.closeEvent(bookId, eventId, userId);
+      return sodam.closeEvent(bookId, eventId, code);
     }
     if (segments.length === 5 && fourth === 'entries' && method === 'POST') {
       const body = await readJson(req);
-      return sodam.createEntry(bookId, eventId, userId, {
+      return sodam.createEntry(bookId, eventId, code, {
         personName: reqString(body, 'personName'),
         amountVnd: reqIntMin0(body, 'amountVnd'),
         source: optEnum<SodamEntrySource>(body, 'source', ENTRY_SOURCES),
@@ -117,28 +126,28 @@ async function dispatch(req: Request, segments: string[]) {
             amountVnd: reqIntMin0(row, 'amountVnd'),
           };
         });
-        return sodam.batchEntries(bookId, eventId, userId, rows);
+        return sodam.batchEntries(bookId, eventId, code, rows);
       }
       if (method === 'PATCH') {
         const body = await readJson(req);
-        return sodam.updateEntry(bookId, eventId, entryId, userId, {
+        return sodam.updateEntry(bookId, eventId, entryId, code, {
           personName: optString(body, 'personName'),
           amountVnd: optIntMin0(body, 'amountVnd'),
           note: optString(body, 'note'),
         });
       }
       if (method === 'DELETE') {
-        return sodam.deleteEntry(bookId, eventId, entryId, userId);
+        return sodam.deleteEntry(bookId, eventId, entryId, code);
       }
     }
   }
 
   // /books/:bookId/people[/search]
   if (segments.length === 3 && sub === 'people') {
-    if (method === 'GET') return sodam.listPeople(bookId, userId);
+    if (method === 'GET') return sodam.listPeople(bookId, code);
     if (method === 'POST') {
       const body = await readJson(req);
-      return sodam.upsertPerson(bookId, userId, {
+      return sodam.upsertPerson(bookId, code, {
         id: optString(body, 'id'),
         displayName: reqString(body, 'displayName'),
         note: optString(body, 'note'),
@@ -147,15 +156,15 @@ async function dispatch(req: Request, segments: string[]) {
   }
   if (segments.length === 4 && sub === 'people' && third === 'search' && method === 'GET') {
     const q = new URL(req.url).searchParams.get('q') ?? '';
-    return sodam.searchPeople(bookId, userId, q);
+    return sodam.searchPeople(bookId, code, q);
   }
 
   // /books/:bookId/relations
   if (segments.length === 3 && sub === 'relations') {
-    if (method === 'GET') return sodam.listRelations(bookId, userId);
+    if (method === 'GET') return sodam.listRelations(bookId, code);
     if (method === 'POST') {
       const body = await readJson(req);
-      return sodam.createRelation(bookId, userId, {
+      return sodam.createRelation(bookId, code, {
         fromPersonId: reqString(body, 'fromPersonId'),
         toPersonId: reqString(body, 'toPersonId'),
         type: reqEnum<SodamRelationType>(body, 'type', RELATION_TYPES),
@@ -165,7 +174,7 @@ async function dispatch(req: Request, segments: string[]) {
 
   // /books/:bookId/tree
   if (segments.length === 3 && sub === 'tree' && method === 'GET') {
-    return sodam.tree(bookId, userId);
+    return sodam.tree(bookId, code);
   }
 
   // /books/:bookId/returns[/:returnId]
@@ -174,11 +183,11 @@ async function dispatch(req: Request, segments: string[]) {
     if (status && !RETURN_STATUSES.includes(status as (typeof RETURN_STATUSES)[number])) {
       throw badRequest(`status must be one of: ${RETURN_STATUSES.join(', ')}`);
     }
-    return sodam.listReturns(bookId, userId, status as 'OPEN' | 'DONE' | 'SKIPPED' | undefined);
+    return sodam.listReturns(bookId, code, status as 'OPEN' | 'DONE' | 'SKIPPED' | undefined);
   }
   if (segments.length === 4 && sub === 'returns' && method === 'PATCH') {
     const body = await readJson(req);
-    return sodam.markReturn(bookId, third, userId, {
+    return sodam.markReturn(bookId, third, code, {
       status: reqEnum(body, 'status', ['DONE', 'SKIPPED'] as const),
       amountVnd: optIntMin0(body, 'amountVnd'),
     });
@@ -186,33 +195,28 @@ async function dispatch(req: Request, segments: string[]) {
 
   // /books/:bookId/export.csv + /import.csv
   if (segments.length === 3 && sub === 'export.csv' && method === 'GET') {
-    return sodam.exportCsv(bookId, userId);
+    return sodam.exportCsv(bookId, code);
   }
   if (segments.length === 3 && sub === 'import.csv' && method === 'POST') {
     const body = await readJson(req);
-    return sodam.importCsv(bookId, userId, reqString(body, 'csv', 0));
+    return sodam.importCsv(bookId, code, reqString(body, 'csv', 0));
   }
 
   // /books/:bookId/ai/*
   if (segments.length === 4 && sub === 'ai' && method === 'POST') {
     const body = third === 'photo' ? null : await readJson(req);
     if (third === 'parse') {
-      return ai.parseUtterance(bookId, userId, reqString(body!, 'text'));
+      return ai.parseUtterance(bookId, code, reqString(body!, 'text'));
     }
     if (third === 'suggest-amount') {
-      return ai.suggestAmount(bookId, userId, reqString(body!, 'personId'));
+      return ai.suggestAmount(bookId, code, reqString(body!, 'personId'));
     }
     if (third === 'photo') {
       const form = await req.formData().catch(() => null);
       const file = form?.get('file');
       if (!(file instanceof File)) return { candidates: [] };
       const buffer = Buffer.from(await file.arrayBuffer());
-      return ai.photoCandidates(
-        bookId,
-        userId,
-        buffer.toString('base64'),
-        file.type || 'image/jpeg',
-      );
+      return ai.photoCandidates(bookId, code, buffer.toString('base64'), file.type || 'image/jpeg');
     }
   }
 
@@ -231,7 +235,7 @@ async function dispatch(req: Request, segments: string[]) {
         payload: (mut.payload ?? {}) as Record<string, unknown>,
       };
     });
-    return sodam.sync(bookId, userId, mutations);
+    return sodam.sync(bookId, code, mutations);
   }
 
   throw notFound('Route not found');

@@ -1,14 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import type { CSSProperties, ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import {
   ArrowLeft,
   BookOpen,
   Camera,
+  Check,
   GitBranch,
   Home,
   LayoutDashboard,
+  Link2,
   Mic,
   Search,
   Users,
@@ -118,6 +120,7 @@ export function SodamShell({
                   )}
                 </p>
               ) : null}
+              {bookName && inviteCode ? <ShareLinkButton inviteCode={inviteCode} /> : null}
             </div>
           </div>
 
@@ -483,6 +486,47 @@ export function EmptyState({
       <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-muted">{body}</p>
       {action ? <div className="mt-4">{action}</div> : null}
     </div>
+  );
+}
+
+/**
+ * "Chia sẻ sổ" — không còn tài khoản/mời thành viên: gửi link này cho người
+ * nhà, mở link là vào thẳng sổ và ghi chung. Link chứa mã sổ nên chỉ chia
+ * sẻ cho người trong nhà.
+ */
+function ShareLinkButton({ inviteCode }: { inviteCode: string }) {
+  const [copied, setCopied] = useState(false);
+  const [fallback, setFallback] = useState<string | null>(null);
+
+  async function copy() {
+    const link = `${window.location.origin}/?code=${encodeURIComponent(inviteCode)}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setFallback(null);
+      window.setTimeout(() => setCopied(false), 2500);
+    } catch {
+      // Clipboard bị chặn (trình duyệt nhúng, quyền) — hiện link để chép tay.
+      setFallback(link);
+    }
+  }
+
+  return (
+    <span className="mt-0.5 block">
+      <button
+        type="button"
+        onClick={() => void copy()}
+        className="inline-flex min-h-6 items-center gap-1 rounded-md text-[11px] text-[#FAF6EF]/75 underline-offset-2 transition-colors hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+      >
+        {copied ? <Check className="size-3" /> : <Link2 className="size-3" />}
+        {copied ? 'Đã chép link chia sẻ' : 'Chép link chia sẻ cho người nhà'}
+      </button>
+      {fallback ? (
+        <span className="mt-1 block max-w-[240px] truncate font-mono text-[10px] text-[#FAF6EF]/60">
+          {fallback}
+        </span>
+      ) : null}
+    </span>
   );
 }
 

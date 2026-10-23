@@ -4,16 +4,47 @@ import { createMockSodamApi, resetSodamMockStore } from './mock';
 describe('sodam mock api OF-01 / SD', () => {
   beforeEach(() => resetSodamMockStore());
 
-  it('SD-01 create book as owner', async () => {
+  it('SD-01 create book (no account) returns a book with an invite code', async () => {
     const api = createMockSodamApi();
     const book = await api.createBook('Nhà A');
-    expect(book.myRole).toBe('OWNER');
+    expect(book.id).toBeTruthy();
     expect(book.inviteCode).toBeTruthy();
+  });
+
+  it('NL-01 no-login flow: create book → event → entry → dashboard totals', async () => {
+    const api = createMockSodamApi();
+    const book = await api.createBook('Sổ cưới 2026');
+    // Resolve "my books" the way the client does: by stored invite codes.
+    const mine = await api.listBooks([book.inviteCode]);
+    expect(mine.map((b) => b.id)).toContain(book.id);
+
+    const event = await api.createEvent(book.id, {
+      title: 'Cưới con gái',
+      kind: 'CUOI',
+      role: 'HOSTED',
+    });
+    await api.createEntry(book.id, event.id, { personName: 'Bác Tư', amountVnd: 1_000_000 });
+    await api.createEntry(book.id, event.id, { personName: 'Cô Năm', amountVnd: 500_000 });
+
+    const dash = await api.dashboard(book.id);
+    expect(dash.totals.receivedGrossVnd).toBe(1_500_000);
+    expect(dash.totals.people).toBe(2);
+    const detail = await api.getEvent(book.id, event.id);
+    expect(detail.entries).toHaveLength(2);
+    expect(detail.totalAmountVnd).toBe(1_500_000);
+  });
+
+  it('NL-02 join by invite code opens the same book; wrong code is rejected', async () => {
+    const api = createMockSodamApi();
+    const book = await api.createBook('Sổ nhà ngoại');
+    const joined = await api.joinBook(book.inviteCode);
+    expect(joined.id).toBe(book.id);
+    await expect(api.joinBook('KHONG-CO-MA-NAY')).rejects.toThrow();
   });
 
   it('SD-04 HOSTED entry creates return', async () => {
     const api = createMockSodamApi();
-    const books = await api.listBooks();
+    const books = await api.listBooks([]);
     const bookId = books[0]!.id;
     const event = await api.createEvent(bookId, {
       title: 'Cưới',
@@ -32,7 +63,7 @@ describe('sodam mock api OF-01 / SD', () => {
 
   it('SD-05 mark return done', async () => {
     const api = createMockSodamApi();
-    const bookId = (await api.listBooks())[0]!.id;
+    const bookId = (await api.listBooks([]))[0]!.id;
     const event = await api.createEvent(bookId, {
       title: 'Cưới',
       kind: 'CUOI',
@@ -52,7 +83,7 @@ describe('sodam mock api OF-01 / SD', () => {
 
   it('SD-05b trả nhiều hơn vẫn trừ đúng số mừng', async () => {
     const api = createMockSodamApi();
-    const bookId = (await api.listBooks())[0]!.id;
+    const bookId = (await api.listBooks([]))[0]!.id;
     const event = await api.createEvent(bookId, {
       title: 'Cưới',
       kind: 'CUOI',
@@ -88,7 +119,7 @@ describe('sodam mock api OF-01 / SD', () => {
 
   it('SD-06 relation tree', async () => {
     const api = createMockSodamApi();
-    const bookId = (await api.listBooks())[0]!.id;
+    const bookId = (await api.listBooks([]))[0]!.id;
     const a = await api.upsertPerson(bookId, { displayName: 'A' });
     const b = await api.upsertPerson(bookId, { displayName: 'B' });
     await api.createRelation(bookId, {
@@ -102,7 +133,7 @@ describe('sodam mock api OF-01 / SD', () => {
 
   it('SD-07 excel roundtrip', async () => {
     const api = createMockSodamApi();
-    const bookId = (await api.listBooks())[0]!.id;
+    const bookId = (await api.listBooks([]))[0]!.id;
     const event = await api.createEvent(bookId, {
       title: 'Cưới',
       kind: 'CUOI',
@@ -119,7 +150,7 @@ describe('sodam mock api OF-01 / SD', () => {
 
   it('OF-02 sync idempotent', async () => {
     const api = createMockSodamApi();
-    const bookId = (await api.listBooks())[0]!.id;
+    const bookId = (await api.listBooks([]))[0]!.id;
     const mut = {
       clientMutationId: 'mut_1',
       type: 'createEntry',
@@ -134,7 +165,7 @@ describe('sodam mock api OF-01 / SD', () => {
 
   it('SV-01 parse via mock', async () => {
     const api = createMockSodamApi();
-    const bookId = (await api.listBooks())[0]!.id;
+    const bookId = (await api.listBooks([]))[0]!.id;
     const r = await api.parseUtterance(bookId, 'Nguyễn A 500 nghìn');
     expect(r.intent).toBe('record');
     expect(r.amountVnd).toBe(500_000);

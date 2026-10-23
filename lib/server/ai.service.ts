@@ -68,8 +68,8 @@ async function chatJson(system: string, user: string): Promise<Record<string, un
   return JSON.parse(data.choices?.[0]?.message?.content ?? '{}') as Record<string, unknown>;
 }
 
-export async function parseUtterance(bookId: string, userId: string, text: string) {
-  await sodam.requireMember(bookId, userId, 'EDITOR');
+export async function parseUtterance(bookId: string, code: string, text: string) {
+  await sodam.requireBookAccess(bookId, code);
   const local = parseVietnameseGiftLine(text);
   try {
     const json = await chatJson(
@@ -107,12 +107,12 @@ export async function parseUtterance(bookId: string, userId: string, text: strin
   }
 }
 
-export async function suggestAmount(bookId: string, userId: string, personId: string) {
-  await sodam.requireMember(bookId, userId);
-  const people = await sodam.listPeople(bookId, userId);
+export async function suggestAmount(bookId: string, code: string, personId: string) {
+  await sodam.requireBookAccess(bookId, code);
+  const people = await sodam.listPeople(bookId, code);
   const person = people.find((p) => p.id === personId);
   const rows = person
-    ? ((await sodam.searchPeople(bookId, userId, person.displayName)).find((p) => p.id === personId)
+    ? ((await sodam.searchPeople(bookId, code, person.displayName)).find((p) => p.id === personId)
         ?.history ?? [])
     : [];
   const avg =
@@ -143,11 +143,11 @@ export async function suggestAmount(bookId: string, userId: string, personId: st
 
 export async function photoCandidates(
   bookId: string,
-  userId: string,
+  code: string,
   imageBase64: string,
   mimeType: string,
 ) {
-  await sodam.requireMember(bookId, userId, 'EDITOR');
+  await sodam.requireBookAccess(bookId, code);
   const model = resolveModel('vision');
   if (!model) {
     throw new HttpError(
