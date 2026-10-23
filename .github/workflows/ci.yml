@@ -71,6 +71,6 @@ jobs:
       # BẮT BUỘC GITHUB_TOKEN khi quét pull_request — thiếu token thì
       # step tự fail ("GITHUB_TOKEN is now required to scan pull
       # requests"); event push quét local nên trước đây vẫn xanh.
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
