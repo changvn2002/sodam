@@ -19,7 +19,7 @@ Repository: https://github.com/changvn2002/sodam
 <p align="center">
   <img src="docs/screenshots/sodam-desktop.png" alt="Sổ Đám — the wedding workspace of a real family book: 13.300.000 ₫ received across five events, 6.800.000 ₫ still held, 6.800.000 ₫ of returns still open" width="900">
 </p>
-<p align="center"><em>The live wedding workspace of a real family book — every guest row carries its return state, the totals strip spells out its own formula, and there is no sign-in anywhere.</em></p>
+<p align="center"><em>The live wedding workspace of a real family book — every guest row carries its return state, the totals strip breaks its own numbers down, and there is no sign-in anywhere.</em></p>
 
 **Tóm tắt (Tiếng Việt):** Sổ Đám là sổ ghi lễ cho các đám của người Việt — cưới, đám hỏi,
 đám tang, giỗ, mừng thọ, tân gia… Ghi ai đã mừng bao nhiêu bằng tay hoặc bằng giọng nói;
@@ -53,7 +53,7 @@ ran as a client module talking to a NestJS backend.
 
 Every screenshot below was captured from the live production deployment at
 https://sodam-tawny.vercel.app (the redesign-v2 "Command Ledger" build,
-v1.1.1) with the app in a **real, populated state** — never an empty first-run
+v1.2.0) with the app in a **real, populated state** — never an empty first-run
 screen. The book on screen is **"Sổ nhà họ Nguyễn"** (capture copy
 "SHOT-V111"), holding five events: a hosted wedding ("Đám cưới Minh Anh &
 Quốc Bảo", 18 Oct 2026) with six guests, a hosted funeral ("Đám tang cụ
@@ -64,25 +64,27 @@ have already been marked as returned — one of them 200.000 ₫ more than the
 guest originally gave. Invite codes are never printed in this README; on the
 home screen the app itself only ever shows a masked code.
 
-### The wedding workspace — ledger, totals and the formula
+### The wedding workspace — ledger, totals and the breakdown
 
-![Desktop 1440×900 — wedding workspace of "Sổ nhà họ Nguyễn": six guest rows with return states, event summary 10.000.000 ₫ received, and the book totals strip with its formula line](docs/screenshots/sodam-desktop.png)
+![Desktop 1440×900 — wedding workspace of "Sổ nhà họ Nguyễn": six guest rows with return states, event summary 10.000.000 ₫ received, and the book totals strip with its two labelled breakdown terms](docs/screenshots/sodam-desktop.png)
 
 _The workspace is one continuous screen: the rail on the left (Sổ → Đám → Mặt),
 the quick-entry command bar on top, and the ledger in the middle. The totals
 strip reads the whole book at a glance — 13.300.000 ₫ received ("Tổng đã nhận"),
 8.200.000 ₫ gone out ("Tổng đã đi (đi đám + trả lễ)" — attended gifts plus
 returns actually paid), 6.800.000 ₫ still held ("Còn giữ") and 6.800.000 ₫ of
-returns still open across 9 obligations ("Cần trả lễ") — and the formula line
-underneath spells the maths out, including the 200.000 ₫ over-given part
-("đi nhiều hơn 200.000 ₫"). The wedding itself took 10.000.000 ₫ from
+returns still open across 9 obligations ("Cần trả lễ") — and the line
+underneath breaks the money out into two labelled terms instead of an
+equation: 6.500.000 ₫ already laid out from what the book received
+("Đã đi trong khoản đã nhận") and 1.700.000 ₫ of over-returns plus attended
+gifts ("Trả dư + đi đám"). The wedding itself took 10.000.000 ₫ from
 6 guests; 6.000.000 ₫ of it is already settled, and every row carries its own
 return state: "Chờ trả", "Đã trả", or "Trả dư" for the guest who was returned
 more than they gave._
 
 | Mobile (390×844) | Social / link-preview (1280×640) |
 | --- | --- |
-| ![Mobile — the same wedding workspace on a phone: event chips, totals and formula on top, guest ledger below, "Còn giữ" and the record button pinned at the bottom](docs/screenshots/sodam-mobile.png) | ![Social — 1280×640 preview frame of the wedding workspace: totals strip, event summary and the first guest rows](docs/screenshots/sodam-social.png) |
+| ![Mobile — the same wedding workspace on a phone: event chips, totals and breakdown on top, guest ledger below, "Còn giữ" and the record button pinned at the bottom](docs/screenshots/sodam-mobile.png) | ![Social — 1280×640 preview frame of the wedding workspace: totals strip, event summary and the first guest rows](docs/screenshots/sodam-social.png) |
 | _On a phone the rail becomes event chips and the four faces become tabs (Tổng quan / Trả lễ / Người / Cây họ); the bottom bar keeps "Còn giữ 6.800.000 ₫" and the "Ghi khoản" button always in reach._ | _The 1280×640 frame of the same screen: the totals, the wedding summary (10.000.000 ₫ mừng, 6.000.000 ₫ đã trả) and the settled / over-given rows are visible before the app even opens._ |
 
 ### Step by step
