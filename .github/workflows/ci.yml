@@ -41,21 +41,36 @@ jobs:
       - name: Test
         run: pnpm test
 
-      - name: Dependency audit (SEC-10 — bằng chứng quét, không chặn merge)
-        # Audit chạy để có bằng chứng + lộ lỗ hổng sớm; chặn merge vì lỗ
-        # hổng đi qua quy trình triage riêng nên bước này không fail job.
-        run: pnpm audit --prod
-        continue-on-error: true
+      - name: Dependency audit (SEC-10 — chặn merge khi có critical/high)
+        # SEC-10/CQ-04 (fix wave sau Panel #03): audit không còn là bước
+        # "chỉ quét để biết" — nó PHẢI fail job khi lockfile chứa lỗ hổng
+        # critical/high, để cổng CI chặn thật thay vì chỉ để lại bằng chứng.
+        run: pnpm audit --prod --audit-level high
 
       - name: Build
         run: pnpm build
 
+      - name: Perf budget (PERF-08 — ngân sách JS first-load)
+        run: node scripts/check-perf-budget.mjs
+
   secret-scan:
     name: secret scan (gitleaks)
     runs-on: ubuntu-latest
+    # F-r3-5: gitleaks-action đọc danh sách commit của PR qua GitHub API
+    # nên job cần quyền đọc pull request đi kèm token ở step dưới.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # F-r3-5 (gốc rễ đã xác minh qua annotation của 3 run PR fail
+      # 39978285479 / 39978280237 / 39978266699): gitleaks-action ≥ v2
+      # BẮT BUỘC GITHUB_TOKEN khi quét pull_request — thiếu token thì
+      # step tự fail ("GITHUB_TOKEN is now required to scan pull
+      # requests"); event push quét local nên trước đây vẫn xanh.
       - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

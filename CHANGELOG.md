@@ -9,10 +9,42 @@ phát hành gắn tag `vX.Y.Z` lên đúng commit đang chạy production và gh
 một dòng vào bảng cặp ở cuối file này: phiên bản → commit SHA → ngày
 deploy. "Về bản vX.Y.Z" khi rollback nghĩa là về commit của tag đó.
 
-## [Chưa phát hành] — đợt sửa sau Panel #02 + hồ sơ chấm vòng 2
+## [1.1.0] — đợt sửa sau Panel #02/#03 + hồ sơ chấm vòng 2–3
 
-Chờ duyệt + deploy. Nội dung từ `FIX-WAVE-STATE.md` (đợt sửa hợp nhất
-2026-10-23); suite tại thời điểm bàn giao: 108/108 test.
+Phiên bản này gồm hai đợt: đợt hợp nhất `bfdd463` (đã chạy production —
+nội dung từ `FIX-WAVE-STATE.md`, suite tại thời điểm bàn giao: 108/108
+test) và đợt sửa sau Panel #03 PASS + re-grade vòng 3
+(`FIX-WAVE-PANEL03-STATE.md`). Phát hành ngày 2026-10-24,
+tag v1.1.0 — xem bảng cặp ở cuối file.
+
+### Đợt sửa sau Panel #03
+
+- **Trang Người (MEDIUM Panel #03):** hai cột số tiền được gán nhãn ngữ
+  nghĩa rõ ràng — cột đối lưu (chỉ tính tiền đi đám ở đám đi dự) phân
+  biệt với số đã trả lễ; tờ chi tiết người hiển thị số đã trả và phân
+  biệt người trả đúng / trả dư / chưa trả, thay cho con số "chênh" gây
+  hiểu sai nghĩa vụ.
+- **Bảo mật API:** trường lạ trong body bị từ chối 400 thay vì nuốt
+  lặng; trần dung lượng body JSON (vượt → 413); route ảnh kiểm tra
+  allowlist + magic bytes + trần dung lượng thay vì tin `file.type` do
+  client khai; `inviteCodeHash` không còn xuất hiện trong payload.
+- **CI chặn thật:** bước audit dependency bỏ chế độ chỉ-cảnh-báo — job
+  fail khi lockfile có lỗ hổng critical/high; sửa job quét secret
+  (gitleaks) fail trên mọi PR của Dependabot: action ≥ v2 bắt buộc
+  `GITHUB_TOKEN` khi quét pull request (bằng chứng: annotation của các
+  run 39978285479 / 39978280237 / 39978266699).
+- **Hạ tầng chất lượng:** ngân sách JS first-load (`perf-budget.json` +
+  `scripts/check-perf-budget.mjs`, chạy trong CI sau build); coverage
+  thresholds trong Vitest; test bất biến tiền dạng property
+  (`lib/server/money-invariants.spec.ts`).
+- **Tài liệu:** ADR-0005 (quyết định Prisma + Neon); `docs/SLO.md` +
+  mẫu postmortem; runbook sự cố riêng `docs/RUNBOOK-INCIDENT.md`; mục
+  quyền riêng tư trong README; `CONTRIBUTING.md`; tuyên bố khả năng
+  tiếp cận `docs/ACCESSIBILITY.md`; ghi region DB (`iad1`) vào
+  `ARCHITECTURE.md`; thống nhất slash canonical ↔ sitemap (SEO-04);
+  `.gitignore` mẫu `.env*` đầy đủ + `.env.example` đủ biến code đọc.
+
+### Đợt hợp nhất bfdd463 (đã lên production)
 
 ### Đã sửa (lỗi người dùng thấy được)
 
@@ -100,4 +132,5 @@ Chờ duyệt + deploy. Nội dung từ `FIX-WAVE-STATE.md` (đợt sửa hợp 
 
 | Phiên bản | Commit | Ngày deploy | Ghi chú |
 |---|---|---|---|
+| 1.1.0 | — | — | Chờ parent gắn tag + deploy (đợt sửa sau Panel #02/#03) |
 | 1.0.0 | `bddb9c4` | 2026-10-23 | Chưa gắn tag (quy ước tag bắt đầu từ lần phát hành kế tiếp) |

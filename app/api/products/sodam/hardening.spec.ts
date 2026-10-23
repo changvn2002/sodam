@@ -258,7 +258,9 @@ describe('W4-F1 — amountVnd Int4 ceiling on every write path', () => {
     expect(over.status).toBe(400);
     const text = await over.text();
     for (const f of FORBIDDEN) expect(text).not.toContain(f);
-    expect((JSON.parse(text) as { message: string }).message).toMatch(/vượt quá|tối đa/);
+    expect((JSON.parse(text) as { error: { message: string } }).error.message).toMatch(
+      /vượt quá|tối đa/,
+    );
   });
 
   it('PATCH entry: amountVnd 2147483648 → 400 (was a leaked 500 on the live build)', async () => {
@@ -328,7 +330,9 @@ describe('W4-F1 — amountVnd Int4 ceiling on every write path', () => {
     expect(res.status).toBe(500);
     const text = await res.text();
     for (const f of FORBIDDEN) expect(text).not.toContain(f);
-    expect((JSON.parse(text) as { message: string }).message).toMatch(/máy chủ|thử lại/);
+    expect((JSON.parse(text) as { error: { message: string } }).error.message).toMatch(
+      /máy chủ|thử lại/,
+    );
   });
 });
 

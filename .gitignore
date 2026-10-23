@@ -2,8 +2,9 @@ node_modules
 .next
 .tmp
 out
-.env
-.env*.local
+# Mọi file env đều bị bỏ qua (ARC-02) — chỉ mẫu .env.example được commit.
+.env*
+!.env.example
 prisma/dev.db
 prisma/dev.db-journal
 *.tsbuildinfo

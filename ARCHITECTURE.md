@@ -11,6 +11,15 @@ Một ứng dụng Next.js duy nhất chứa cả giao diện lẫn API; không 
 riêng, không có tài khoản người dùng. Dữ liệu nằm trong PostgreSQL (Neon,
 gắn qua Vercel Storage).
 
+**Region (OPS-02):** cơ sở dữ liệu Neon `sodam-db` đặt tại region
+**`iad1`** (US East — N. Virginia; nguồn: hồ sơ cấu hình Vercel Storage
+của dự án). Khuyến nghị giữ region của Vercel Functions khớp region của
+DB (`iad1`) để mỗi truy vấn Prisma không trả thêm độ trễ liên vùng —
+hàm serverless và DB cùng region là cấu hình chuẩn cho độ trễ API trong
+`docs/SLO.md`. Việc ghim function region bằng `vercel.json` là thay đổi
+hành vi deploy, chỉ thực hiện khi có quyết định riêng của người vận
+hành (chưa ghim tại thời điểm viết tài liệu này).
+
 ```
 Trình duyệt
 ├─ App shell (React, components/sodam/) — 5 "mặt": Tổng quan / Đám / Trả lễ / Người / Cây họ

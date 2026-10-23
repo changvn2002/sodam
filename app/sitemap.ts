@@ -8,7 +8,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
   // cho đồng bộ với dichbome.
   return [
     {
-      url: `${base}/`,
+      // SEO-04: khớp dạng canonical — siteUrl() đã bỏ slash cuối, <loc>
+      // của route gốc dùng đúng base (không thêm "/") như canonical/og:url.
+      url: base,
       lastModified: new Date(),
       changeFrequency: 'weekly',
       priority: 1,

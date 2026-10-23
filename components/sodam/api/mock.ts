@@ -9,6 +9,7 @@ import type {
   SodamSyncMutation,
 } from './types';
 import { parseVietnameseGiftLine } from '../lib/parse-money';
+import { rememberBook } from '../lib/book-store';
 
 function id(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
@@ -85,6 +86,10 @@ export function createMockSodamApi(): SodamApi {
       // Mã cũ chết ngay — join lại bằng mã cũ phải thất bại (đúng server).
       book.inviteCode = id('inv').slice(-6).toUpperCase();
       book.updatedAt = now();
+      // F-r3-2: mirror http.ts — registry thiết bị phải trỏ sang mã mới
+      // ngay, nếu không mọi lần gọi sau bằng mã cũ đều 404. rememberBook tự
+      // no-op ngoài trình duyệt (book-store guard typeof window).
+      rememberBook(book.id, book.inviteCode);
       return { ...book };
     },
     async dashboard(bookId) {

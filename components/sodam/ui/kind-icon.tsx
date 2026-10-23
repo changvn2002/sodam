@@ -13,7 +13,7 @@ import { groupOfKind, type LexiconGroup } from '../lib/lexicon';
  * ăn hỏi = nhẫn đính đá, mừng tuổi = bao lì xì có đồng xu (vật thật của
  * loại này — không phải phong bì generic), thôi nôi = lục lạc, đầy tháng =
  * trăng sao, tân gia = nhà, khai trương = mặt tiền cửa hàng, sinh nhật =
- * bánh kem, tốt nghiệp = mũ cử nhân, mừng thọ giữ cành đào, khác = sổ tay.
+ * bánh kem, tốt nghiệp = mũ cử nhân, mừng thọ = quả đào tiên, khác = sổ tay.
  */
 
 /** Bát hương ba nén — glyph trang trọng dùng chung cho nhóm solemn/loại MA. */
@@ -83,15 +83,27 @@ const KIND_PATHS: Partial<Record<SodamEventKind, ReactNode>> = {
   MA: INCENSE_PATH,
   // Giỗ — nến trên đài (giữ nguyên mẫu panel đã duyệt).
   GIO: GROUP_PATHS.memorial,
-  // Mừng thọ — cành đào (giữ nguyên).
-  MUNG_THO: GROUP_PATHS.longevity,
-  // Thôi nôi — lục lạc trẻ nhỏ.
+  // Mừng thọ — quả đào tiên (vật biểu trưng mừng thọ).
+  // B8 (Panel #03 / R1): glyph cành đào cũ (cành chéo + 2 vòng tròn) đọc
+  // như chiếc chìa khoá ở cỡ chip — thay bằng quả đào: thân quả có rãnh
+  // dọc + cuống lá ở đỉnh, cùng kỷ luật stroke/viewBox với 13 chip.
+  MUNG_THO: (
+    <>
+      <path d="M12 21C7.2 17.2 4.8 13.6 4.8 10.2 4.8 7.1 7.2 5.2 9.7 5.8c.9-.9 3.7-.9 4.6 0 2.5-.6 4.9 1.3 4.9 4.4 0 3.4-2.4 7-7.2 10.8Z" />
+      <path d="M12 5.9c-.8 2.5-.8 5.2 0 7.9" />
+      <path d="M12.9 4.9c.4-1.7 1.8-2.8 3.8-3 .1 2-1.1 3.3-3 3.6" />
+    </>
+  ),
+  // Thôi nôi — lục lạc trẻ nhỏ: đầu tròn có vòng trong + bi, tay cầm xiên
+  // có hai ngấn nắm. B8: bản cũ (tròn + que thẳng + 2 chấm) mơ hồ; bản này
+  // thêm vòng trong/bi/tay cầm xiên có ngấn để đọc ra lục lạc ngay ở cỡ chip.
   THOI_NOI: (
     <>
-      <circle cx="12" cy="9" r="5.5" />
-      <line x1="12" y1="14.5" x2="12" y2="20.5" />
-      <circle cx="10" cy="7.8" r="0.4" fill="currentColor" />
-      <circle cx="14" cy="10.4" r="0.4" fill="currentColor" />
+      <circle cx="10" cy="10" r="6" />
+      <circle cx="10" cy="10" r="2.4" />
+      <circle cx="7.6" cy="6.8" r="0.4" fill="currentColor" />
+      <path d="M14.3 14.3 20.2 20.2" />
+      <path d="M15.9 18.1l2.3-2.3M18 20.2l2.3-2.3" />
     </>
   ),
   // Đầy tháng — trăng lưỡi liềm + sao.

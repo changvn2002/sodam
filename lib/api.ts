@@ -17,11 +17,17 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const text = await response.text();
   const data = text ? (JSON.parse(text) as T) : (undefined as T);
   if (!response.ok) {
-    const message =
-      data && typeof data === 'object' && 'message' in data
-        ? Array.isArray((data as { message: unknown }).message)
-          ? (data as { message: string[] }).message.join(', ')
-          : String((data as { message: unknown }).message)
+    // ARC-09: server errors arrive as { error: { code, message, fields? } }.
+    // Keep the legacy top-level `message` fallback for safety.
+    const errObj =
+      data && typeof data === 'object'
+        ? ((data as { error?: { message?: unknown } }).error ?? (data as { message?: unknown }))
+        : null;
+    const raw = errObj?.message;
+    const message = Array.isArray(raw)
+      ? raw.join(', ')
+      : raw != null
+        ? String(raw)
         : response.statusText;
     throw new Error(message);
   }

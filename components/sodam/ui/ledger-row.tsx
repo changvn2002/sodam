@@ -34,13 +34,19 @@ export function LedgerRow({
     <>
       <PersonAvatar name={name} seed={personId} size="md" className="relative z-[1]" />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[15px] font-medium text-ink">{name}</span>
+        {/* D-4 / B4 (Panel #03 R5): họ tên là khoá đối chiếu trang trọng —
+            KHÔNG ellipsis tên để nhường số tiền/chip. Tên dài WRAP xuống
+            dòng (overflow-wrap:anywhere cho tên không khoảng trắng), số
+            tiền và chip giữ nguyên kích thước (shrink-0). */}
+        <span className="block text-[15px] leading-snug font-medium [overflow-wrap:anywhere] text-ink">
+          {name}
+        </span>
         {meta ? <span className="mt-0.5 block truncate text-xs text-muted">{meta}</span> : null}
       </span>
       <span className="shrink-0 font-mono text-[15px] font-semibold tabular-nums text-ink">
         {amountLabel}
       </span>
-      {trailing}
+      {trailing ? <span className="shrink-0">{trailing}</span> : null}
     </>
   );
 

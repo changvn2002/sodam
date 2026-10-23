@@ -46,7 +46,7 @@ ran as a client module talking to a NestJS backend.
 - **People directory** with gift history search, plus a **family tree** built from relations (spouse / parent / child / sibling / other).
 - **Dashboard totals**: received, settled, pending returns, over-given, given.
 - **CSV export/import** of a book's ledger.
-- **Offline outbox (partial offline, stated precisely)**: the app needs a connection to load and open a book — there is no service worker and the app does **not** work fully offline. But if the connection drops while the app is open, new entries you record are queued in an on-device outbox (IndexedDB) and synced automatically when you are back online (entry creations only — see *Known limitations*).
+- **Offline outbox (partial offline, stated precisely)**: a hand-written service worker precaches the app shell, but book data lives on the server — opening a book needs a connection and the app does **not** work fully offline. If the connection drops while the app is open, new entries you record are queued in an on-device outbox (IndexedDB) and synced automatically when you are back online (entry creations only — see *Known limitations*).
 - **Lunar calendar** display for event dates (Vietnamese âm lịch).
 
 ## 🖼️ Screenshots
@@ -142,7 +142,7 @@ per person, not just per event.
 
 ### Prerequisites
 
-- Node.js ≥ 20
+- Node.js ≥ 24 (khớp `engines` trong `package.json`; `.nvmrc` ghim 24)
 - pnpm 10 (the repo pins `packageManager: pnpm@10.32.1` — `corepack enable` or `npm i -g pnpm`)
 - A PostgreSQL database — free tiers work fine: [Supabase](https://supabase.com) or [Neon](https://neon.tech). Create a project and copy its PostgreSQL connection string.
 
@@ -152,7 +152,7 @@ per person, not just per event.
 git clone https://github.com/changvn2002/sodam.git
 cd sodam
 cp .env.example .env        # fill in DATABASE_URL
-pnpm install                # also runs `prisma generate`
+pnpm install --frozen-lockfile   # also runs `prisma generate`
 pnpm db:push                # create the tables in your database
 pnpm dev                    # http://localhost:3100
 ```
@@ -191,7 +191,51 @@ See `.env.example` for the documented template.
 
 **AI behavior without a key (honest by design):** voice parse and amount suggestions fall back to the built-in local Vietnamese parser / history average — the same fallback the original host used when its AI platform errored. Photo extraction has no local fallback: the API returns `503` and the UI shows an error instead of inventing names/amounts.
 
-## 📁 Project structure
+## 🔒 Quyền riêng tư & dữ liệu của bạn
+
+Sổ Đám không có tài khoản — và mục này nói rõ điều đó nghĩa là gì với dữ
+liệu của bạn:
+
+- **Không tài khoản, không mật khẩu.** Thứ duy nhất "khoá" một cuốn sổ
+  là **mã mời** của chính cuốn sổ đó. **Ai có mã mời hoặc link chia sẻ
+  (`/?code=…`) đều mở được sổ và ghi được vào sổ** — hãy coi mã mời như
+  mật khẩu và chỉ đưa cho người nhà. Máy chủ chỉ lưu mã dưới dạng băm
+  SHA-256, không lưu mã gốc.
+- **Dữ liệu sổ nằm ở đâu:** tên đám, tên người, số tiền và ghi chú bạn
+  nhập được lưu trong cơ sở dữ liệu PostgreSQL (Neon) của bản triển
+  khai, phục vụ qua Vercel. Bản production chính thức chạy trên Vercel +
+  Neon; nếu bạn tự triển khai, dữ liệu nằm trong database của chính bạn.
+- **Không thu thập thông tin ngân hàng.** Sổ Đám không có trường tài
+  khoản ngân hàng, không yêu cầu và không lưu bất kỳ thông tin thanh
+  toán nào.
+- **Quyền của bạn với dữ liệu:** xuất toàn bộ sổ ra CSV bất cứ lúc nào
+  (mục xuất/nhập trong app); **đổi mã mời** để thu hồi quyền truy cập
+  của mã cũ ngay tức thì (mã cũ chết hẳn, xem
+  [ADR-0003](docs/adr/0003-invite-code-rotation.md)); xoá sổ là xoá
+  khỏi máy chủ.
+- **Trên thiết bị của bạn:** danh sách sổ đã mở lưu ở localStorage,
+  khoản ghi khi mất mạng chờ ở IndexedDB trên chính máy bạn cho tới khi
+  gửi được — không bên thứ ba nào nhận dữ liệu này.
+- **AI là tuỳ chọn và mặc định tắt trên bản public:** khi người tự
+  triển khai cấu hình khoá AI, chỉ đúng đoạn chữ/ảnh bạn vừa đưa cho
+  tính năng đó mới được gửi tới nhà cung cấp AI đã cấu hình — không gửi
+  mã mời, không gửi dữ liệu sổ khác. Danh sách đầy đủ các bên thứ ba và
+  dữ liệu rời hệ thống: [THIRD-PARTIES.md](THIRD-PARTIES.md).
+
+**Privacy in short (EN):** no accounts; a book's invite code is its only
+credential — anyone holding the code or share link can open the book, so
+treat it like a password. Book data lives in the deployment's PostgreSQL
+(Neon) database served via Vercel; the server stores only a SHA-256 hash
+of the code. No bank or payment information is collected, ever. You can
+export a book to CSV at any time, rotate the invite code to revoke the
+old one instantly, and delete a book from the server.
+
+## 📁 Architecture & project structure
+
+Kiến trúc hệ thống đầy đủ (sơ đồ, mô hình truy cập, ranh giới module,
+luồng dữ liệu) nằm ở **[ARCHITECTURE.md](ARCHITECTURE.md)**; các quyết
+định lớn có hồ sơ riêng trong [`docs/adr/`](docs/adr/). Cây thư mục dưới
+đây chỉ là bản đồ nhanh:
 
 ```
 app/
@@ -236,9 +280,9 @@ docs/screenshots/                  # production screenshots used in this README
 ## Known limitations
 
 - **Offline sync only applies `createEntry` mutations** — this is inherited from the original design, kept faithful on purpose: the server-side `sync()` records every client mutation id (idempotency cursor) and acknowledges it, but only entry creations change data. Other offline edits are not replayed.
-- **No offline app shell**: there is no service worker, so opening or reloading the app and loading a book always needs a connection (book data lives in PostgreSQL on the server). The offline outbox above only covers recording *new* entries while the app is already open.
+- **Book data needs a connection**: the service worker serves the cached app shell offline, but opening or reloading a book always needs a connection (book data lives in PostgreSQL on the server). The offline outbox above only covers recording *new* entries while the app is already open.
 - Photo extraction requires a configured vision-capable AI model; there is no offline/OCR fallback.
-- Anyone who holds a book's invite code can read and write that book — that is the sharing model. Treat codes like passwords and share them only with family. Codes cannot be rotated in this release; create a new book if a code leaks.
+- Anyone who holds a book's invite code can read and write that book — that is the sharing model. Treat codes like passwords and share them only with family. If a code leaks, rotate it from the book's share panel — the old code and every link shared with it stop working immediately.
 
 ## 🔍 SEO & PWA
 
@@ -270,6 +314,15 @@ pnpm install --frozen-lockfile
 pnpm build
 pnpm start
 ```
+
+## 🆘 Hỗ trợ & bảo mật
+
+- **Cần hỗ trợ / báo lỗi / góp ý:** mở issue tại
+  [github.com/changvn2002/sodam/issues](https://github.com/changvn2002/sodam/issues).
+- **Báo lỗ hổng bảo mật:** KHÔNG mở issue công khai — làm theo
+  [SECURITY.md](SECURITY.md) (GitHub Security Advisories).
+- **Khả năng tiếp cận:** trạng thái hiện tại và các khoảng trống đã biết
+  được tuyên bố trung thực tại [docs/ACCESSIBILITY.md](docs/ACCESSIBILITY.md).
 
 ## 📄 License
 

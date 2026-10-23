@@ -7,6 +7,7 @@ import type {
 import * as ai from '@/lib/server/ai.service';
 import { badRequest, notFound } from '@/lib/server/errors';
 import {
+  assertOnlyFields,
   handle,
   optEnum,
   optIntMin0,
@@ -49,6 +50,7 @@ async function dispatch(req: Request, segments: string[]) {
   // /books — create a new book (no credential needed: creating grants one)
   if (segments.length === 1 && method === 'POST') {
     const body = await readJson(req);
+    assertOnlyFields(body, ['name']);
     return sodam.createBook(reqString(body, 'name', 1, 200));
   }
 
@@ -56,6 +58,7 @@ async function dispatch(req: Request, segments: string[]) {
   // NOTE: for 2-segment paths the second segment sits in `bookId`, not `sub`.
   if (segments.length === 2 && bookId === 'mine' && method === 'POST') {
     const body = await readJson(req);
+    assertOnlyFields(body, ['codes']);
     const codes = Array.isArray(body.codes)
       ? body.codes.filter((c): c is string => typeof c === 'string')
       : [];
@@ -65,6 +68,7 @@ async function dispatch(req: Request, segments: string[]) {
   // /books/join — open a book by its invite code (SEC-08: throttled per IP)
   if (segments.length === 2 && bookId === 'join' && method === 'POST') {
     const body = await readJson(req);
+    assertOnlyFields(body, ['inviteCode']);
     const ip =
       req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
       req.headers.get('x-real-ip') ||
@@ -93,6 +97,7 @@ async function dispatch(req: Request, segments: string[]) {
     if (method === 'GET') return sodam.listEvents(bookId, code);
     if (method === 'POST') {
       const body = await readJson(req);
+      assertOnlyFields(body, ['title', 'kind', 'role', 'occurredOn', 'note']);
       return sodam.createEvent(bookId, code, {
         title: reqString(body, 'title', 1, 200),
         kind: reqEnum<SodamEventKind>(body, 'kind', SODAM_EVENT_KINDS),
@@ -114,6 +119,14 @@ async function dispatch(req: Request, segments: string[]) {
     }
     if (segments.length === 5 && fourth === 'entries' && method === 'POST') {
       const body = await readJson(req);
+      assertOnlyFields(body, [
+        'personName',
+        'amountVnd',
+        'source',
+        'note',
+        'rawText',
+        'clientMutationId',
+      ]);
       return sodam.createEntry(bookId, eventId, code, {
         personName: reqString(body, 'personName', 1, 200),
         amountVnd: reqIntMin0(body, 'amountVnd'),
@@ -127,10 +140,12 @@ async function dispatch(req: Request, segments: string[]) {
       const entryId = segments[5];
       if (entryId === 'batch' && method === 'POST') {
         const body = await readJson(req);
+        assertOnlyFields(body, ['rows']);
         const rowsRaw = body.rows;
         if (!Array.isArray(rowsRaw)) throw badRequest('rows must be an array');
         const rows = rowsRaw.map((r) => {
           const row = (r ?? {}) as Record<string, unknown>;
+          assertOnlyFields(row, ['personName', 'amountVnd']);
           return {
             personName: reqString(row, 'personName', 1, 200),
             amountVnd: reqIntMin0(row, 'amountVnd'),
@@ -140,6 +155,7 @@ async function dispatch(req: Request, segments: string[]) {
       }
       if (method === 'PATCH') {
         const body = await readJson(req);
+        assertOnlyFields(body, ['personName', 'amountVnd', 'note']);
         return sodam.updateEntry(bookId, eventId, entryId, code, {
           personName: optString(body, 'personName', 200),
           amountVnd: optIntMin0(body, 'amountVnd'),
@@ -157,6 +173,7 @@ async function dispatch(req: Request, segments: string[]) {
     if (method === 'GET') return sodam.listPeople(bookId, code);
     if (method === 'POST') {
       const body = await readJson(req);
+      assertOnlyFields(body, ['id', 'displayName', 'note']);
       return sodam.upsertPerson(bookId, code, {
         id: optString(body, 'id', 100),
         displayName: reqString(body, 'displayName', 1, 200),
@@ -174,6 +191,7 @@ async function dispatch(req: Request, segments: string[]) {
     if (method === 'GET') return sodam.listRelations(bookId, code);
     if (method === 'POST') {
       const body = await readJson(req);
+      assertOnlyFields(body, ['fromPersonId', 'toPersonId', 'type']);
       return sodam.createRelation(bookId, code, {
         fromPersonId: reqString(body, 'fromPersonId', 1, 100),
         toPersonId: reqString(body, 'toPersonId', 1, 100),
@@ -200,6 +218,7 @@ async function dispatch(req: Request, segments: string[]) {
   }
   if (segments.length === 4 && sub === 'returns' && method === 'PATCH') {
     const body = await readJson(req);
+    assertOnlyFields(body, ['status', 'amountVnd']);
     return sodam.markReturn(bookId, third, code, {
       status: reqEnum(body, 'status', ['DONE', 'SKIPPED', 'OPEN'] as const),
       amountVnd: optIntMin0(body, 'amountVnd'),
@@ -212,6 +231,7 @@ async function dispatch(req: Request, segments: string[]) {
   }
   if (segments.length === 3 && sub === 'import.csv' && method === 'POST') {
     const body = await readJson(req);
+    assertOnlyFields(body, ['csv']);
     return sodam.importCsv(bookId, code, reqString(body, 'csv', 0, 200_000));
   }
 
@@ -219,26 +239,36 @@ async function dispatch(req: Request, segments: string[]) {
   if (segments.length === 4 && sub === 'ai' && method === 'POST') {
     const body = third === 'photo' ? null : await readJson(req);
     if (third === 'parse') {
+      assertOnlyFields(body!, ['text']);
       return ai.parseUtterance(bookId, code, reqString(body!, 'text', 1, 2000));
     }
     if (third === 'suggest-amount') {
+      assertOnlyFields(body!, ['personId']);
       return ai.suggestAmount(bookId, code, reqString(body!, 'personId', 1, 100));
     }
     if (third === 'photo') {
       const form = await req.formData().catch(() => null);
       const file = form?.get('file');
       if (!(file instanceof File)) return { candidates: [] };
+      // SEC-15: size → allowlist → magic bytes (xem ai.service.ts) chạy
+      // TRƯỚC khi toàn bộ file được đọc vào bộ nhớ cho bước AI; mime đưa
+      // cho AI là mime suy từ magic bytes, không phải file.type client khai.
+      const { mimeType } = await ai.inspectPhotoFile(file);
       const buffer = Buffer.from(await file.arrayBuffer());
-      return ai.photoCandidates(bookId, code, buffer.toString('base64'), file.type || 'image/jpeg');
+      return ai.photoCandidates(bookId, code, buffer.toString('base64'), mimeType);
     }
   }
 
   // /books/:bookId/sync
   if (segments.length === 3 && sub === 'sync' && method === 'POST') {
     const body = await readJson(req);
+    assertOnlyFields(body, ['mutations']);
     if (!Array.isArray(body.mutations)) throw badRequest('mutations must be an array');
     const mutations = body.mutations.map((m) => {
       const mut = (m ?? {}) as Record<string, unknown>;
+      // payload là record tự do theo thiết kế offline (service chỉ đọc các
+      // khóa đã biết) — allowlist chỉ khóa ở tầng mutation.
+      assertOnlyFields(mut, ['clientMutationId', 'type', 'payload']);
       if (typeof mut.clientMutationId !== 'string' || typeof mut.type !== 'string') {
         throw badRequest('each mutation needs clientMutationId and type strings');
       }

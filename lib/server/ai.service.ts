@@ -1,4 +1,4 @@
-import { HttpError } from './errors';
+import { badRequest, HttpError, payloadTooLarge } from './errors';
 import { parseVietnameseGiftLine } from './parse-gift';
 import * as sodam from './sodam.service';
 
@@ -39,10 +39,36 @@ function resolveModel(kind: 'chat' | 'vision'): AiModel | null {
   return { baseUrl, apiKey, modelName };
 }
 
+/**
+ * ARC-14 (re-grade r3): mọi lời gọi AI đều có timeout tường minh. Trước
+ * đây 2 fetch tới AI endpoint không mang signal nào — nhà cung cấp treo là
+ * request treo theo mặc định của nền tảng. 15s đủ rộng cho completion ngắn
+ * (temperature 0.1, JSON ngắn, kể cả vision) mà vẫn cắt sớm để rơi về
+ * đường lỗi hiện hữu: parse/suggest nuốt lỗi vào fallback local, photo đi
+ * qua handle() thành 500 generic — lỗi timeout là Error thường, không
+ * chứa chi tiết nội bộ nào để lộ ra ngoài.
+ */
+export const AI_FETCH_TIMEOUT_MS = 15_000;
+
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), AI_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (controller.signal.aborted) {
+      throw new Error(`AI request timed out after ${AI_FETCH_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function chatJson(system: string, user: string): Promise<Record<string, unknown>> {
   const model = resolveModel('chat');
   if (!model) throw new Error('AI is not configured (OPENAI_API_KEY missing)');
-  const response = await fetch(`${model.baseUrl}/chat/completions`, {
+  const response = await fetchWithTimeout(`${model.baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${model.apiKey}`,
@@ -141,6 +167,71 @@ export async function suggestAmount(bookId: string, code: string, personId: stri
   }
 }
 
+/**
+ * SEC-15 (re-grade r3): kiểm tra file ảnh TRƯỚC khi bất kỳ byte dữ liệu
+ * ảnh nào bị đọc trọn vào bộ nhớ cho bước xử lý AI. Route cũ tin thẳng
+ * `file.type` do client khai và `arrayBuffer()` nạp toàn bộ file trước
+ * mọi kiểm tra. Thứ tự kiểm tra ở đây là bắt buộc:
+ *   1. `file.size` (metadata, chưa đọc nội dung) — trần 10 MiB → 413.
+ *      10 MiB rộng hơn nhu cầu thật (ảnh chụp trang sổ trên điện thoại
+ *      thường 2–6 MiB) nhưng chặn được file khổng lồ dội vào bộ nhớ.
+ *   2. Định dạng khai báo phải thuộc allowlist jpeg/png/webp — đúng 3
+ *      định dạng ảnh chụp phổ biến mà đường vision nhận; khác → 400.
+ *   3. MAGIC BYTES đọc từ `file.slice(0, 16)` (tối đa 16 byte): JPEG
+ *      `FF D8 FF`, PNG `89 50 4E 47`, WEBP `RIFF....WEBP`. Magic phải
+ *      KHỚP định dạng đã khai — lệch → 400.
+ * Mime trả về là mime suy từ magic bytes (sự thật của file), không phải
+ * lời khai của client; route dùng mime này cho bước AI.
+ */
+export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+
+const PHOTO_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+export type PhotoMimeType = (typeof PHOTO_MIME_TYPES)[number];
+
+function sniffPhotoMimeType(head: Uint8Array): PhotoMimeType | null {
+  if (head.length >= 3 && head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  if (
+    head.length >= 4 &&
+    head[0] === 0x89 &&
+    head[1] === 0x50 &&
+    head[2] === 0x4e &&
+    head[3] === 0x47
+  ) {
+    return 'image/png';
+  }
+  if (
+    head.length >= 12 &&
+    head[0] === 0x52 && // R
+    head[1] === 0x49 && // I
+    head[2] === 0x46 && // F
+    head[3] === 0x46 && // F
+    head[8] === 0x57 && // W
+    head[9] === 0x45 && // E
+    head[10] === 0x42 && // B
+    head[11] === 0x50 // P
+  ) {
+    return 'image/webp';
+  }
+  return null;
+}
+
+export async function inspectPhotoFile(file: File): Promise<{ mimeType: PhotoMimeType }> {
+  if (file.size > MAX_PHOTO_BYTES) {
+    throw payloadTooLarge('Ảnh quá lớn — tối đa 10 MB. Vui lòng chọn ảnh nhỏ hơn.');
+  }
+  if (!(PHOTO_MIME_TYPES as readonly string[]).includes(file.type)) {
+    throw badRequest('Chỉ nhận ảnh JPG, PNG hoặc WebP.');
+  }
+  const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const sniffed = sniffPhotoMimeType(head);
+  if (!sniffed || sniffed !== file.type) {
+    throw badRequest('Nội dung file không khớp định dạng ảnh đã khai.');
+  }
+  return { mimeType: sniffed };
+}
+
 export async function photoCandidates(
   bookId: string,
   code: string,
@@ -158,7 +249,7 @@ export async function photoCandidates(
       'Tính năng đọc ảnh chưa được bật trên máy chủ này. Bạn vẫn ghi khoản bằng tay hoặc bằng giọng nói được.',
     );
   }
-  const response = await fetch(`${model.baseUrl}/chat/completions`, {
+  const response = await fetchWithTimeout(`${model.baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${model.apiKey}`,

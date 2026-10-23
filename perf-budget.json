@@ -1,0 +1,22 @@
+{
+  "codeSplitEvidence": [
+    "JS bên thứ ba trên critical path = 0 byte (khớp kê khai THIRD-PARTIES.md): avatar DiceBear sinh tại client từ thư viện đã bundle, không gọi API ngoài.",
+    "Toàn bộ client của app nằm trong 6 chunk của route '/' ở thời điểm khai ngân sách (runtime Turbopack + framework + app) — chi tiết từng chunk in ra khi chạy scripts/check-perf-budget.mjs."
+  ],
+  "enforcedBy": "scripts/check-perf-budget.mjs — chạy trong CI (.github/workflows/ci.yml) sau bước build",
+  "firstRouteJsGzipBudgetBytes": 200000,
+  "growthLock": "Tăng firstRouteJsGzipBudgetBytes quá 10%/release mà không có ADR = FAIL (PERF-08). Mọi thay đổi file này phải ghi lý do vào CHANGELOG.md.",
+  "hardCapBytes": 307200,
+  "item": "PERF-08 — ngân sách JavaScript trên critical path (Enterprise Checklist v1.0)",
+  "measuredAtDeclare": {
+    "commit": "bfdd463 + fix wave sau Panel #03 (chưa commit)",
+    "date": "2026-10-23",
+    "firstPartyJsGzipBytes": 180666,
+    "firstRouteJsGzipBytes": 180666,
+    "method": "scripts/check-perf-budget.mjs — route '/' không có HTML prerender (render động) nên phép đo lấy hợp của build-manifest rootMainFiles + mọi chunk JS mà page_client-reference-manifest.js của route '/' tham chiếu, gzip (zlib level 9) từng file trong .next/static/chunks. Phép đo chuẩn của mục là Lighthouse trên live; job này là hàng rào CI chống phình.",
+    "note": "Số đo lấy từ bản .next sẵn có trong repo tại thời điểm khai ngân sách (BUILD_ID 3gdZOJn-JntE5RucWaZPN). Sau lần build mới đầu tiên, chạy lại script và cập nhật firstRouteJsGzipBytes theo số thật; ngân sách 200000 B = số đo + ~11% headroom.",
+    "thirdPartyJsGzipBytes": 0
+  },
+  "route": "/ (route nội dung duy nhất; render động vì CSP nonce từng request — ADR-0004)",
+  "tier": "B (app công cụ tương tác — ngân sách tự khai, trần cứng tuyệt đối 300 KB theo quy ước panel)"
+}

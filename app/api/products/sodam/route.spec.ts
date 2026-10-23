@@ -465,8 +465,12 @@ describe('SEC-08 — hashed invite codes + join throttling', () => {
     }
     const blocked = await join('ANYCODEWHATEVER1', '1.2.3.4');
     expect(blocked.status).toBe(429);
-    const body = (await blocked.json()) as { message: string };
-    expect(body.message).toContain('15 phút');
+    // ARC-09 verbatim lock: the 429 message reaches the client word for word.
+    const body = (await blocked.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('TOO_MANY_REQUESTS');
+    expect(body.error.message).toBe(
+      'Bạn đã thử mở sổ quá nhiều lần. Đợi khoảng 15 phút rồi thử lại.',
+    );
   });
 
   it('(iv-b) throttle code-scope: the same wrong code from many IPs is blocked at the limit', async () => {
@@ -681,20 +685,23 @@ describe('DATA-04(ii) — rotate invite code + SEC-12 no-store', () => {
     );
     expect(joinNew.status).toBe(200);
 
-    // /books/mine with the new code resolves the book and shows the stored
-    // row carries a hash of the NEW code and no plaintext at all.
+    // /books/mine with the new code resolves the book — and the response
+    // must NOT carry inviteCodeHash (F-r3-4); the hash of the NEW code is
+    // verified on the stored row via the fake Prisma instead.
     const mine = await POST(
       req('POST', ['books', 'mine'], { codes: [after.inviteCode] }),
       ctx(['books', 'mine']),
     );
-    const list = (await mine.json()) as Array<{
-      id: string;
-      inviteCode: string;
-      inviteCodeHash: string | null;
-    }>;
+    const mineText = await mine.text();
+    expect(mineText).not.toContain('inviteCodeHash');
+    const list = JSON.parse(mineText) as Array<{ id: string; inviteCode: string }>;
     const row = list.find((b) => b.id === book.id);
     expect(row).toBeDefined();
-    expect(row!.inviteCodeHash).toBe(hashInviteCode(after.inviteCode));
+    expect(row!.inviteCode).toBe(after.inviteCode);
+    const stored = (await fake.prisma.sodamBook.findUnique({
+      where: { id: book.id },
+    } as never)) as { inviteCodeHash: string | null } | null;
+    expect(stored?.inviteCodeHash).toBe(hashInviteCode(after.inviteCode));
   });
 
   it('rotate with a wrong code → 404 and the current code keeps working', async () => {

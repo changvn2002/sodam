@@ -1,20 +1,10 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import {
-  ArrowLeft,
-  Check,
-  Clock,
-  Copy,
-  Minus,
-  Plus,
-  Search,
-  Share2,
-  TriangleAlert,
-  X,
-} from 'lucide-react';
+import { ArrowLeft, Check, Clock, Copy, Minus, Plus, Search, TriangleAlert, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { OfflineBanner } from './ui/offline-ui';
+import { Btn } from './shell-primitives';
 import { GROUP_STYLE, groupOfKind } from './lib/lexicon';
 import type { SodamEvent } from './api/types';
 
@@ -106,7 +96,7 @@ export function WorkspaceShell({
       {/* Rail — desktop */}
       <aside className="hidden min-h-0 flex-col overflow-y-auto bg-indigo-950 text-white lg:flex">
         <div className="flex items-center gap-2.5 px-5 pt-5">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- logo là SVG tĩnh trong public/ (asset nội bộ cố định); next/image không tối ưu SVG nên <img> thẳng là đúng */}
           <img
             src="/products/brand/sodam-logo.svg"
             alt=""
@@ -218,9 +208,9 @@ export function WorkspaceShell({
         {/* Thanh trên — desktop */}
         <header className="hidden min-h-[52px] items-center gap-3 border-b border-line bg-card px-5 lg:flex">
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xs text-muted">
-              {bookName} / {faceLabel}
-            </p>
+            {/* B6: dòng điều hướng KHÔNG lặp nguyên văn H1 (tên sổ) — chỉ nói
+                đang xem mặt nào; tên sổ là H1 duy nhất bên dưới. */}
+            <p className="truncate text-xs text-muted">Đang xem: {faceLabel}</p>
             <h1 className="truncate text-[17px] leading-tight font-semibold">{bookName}</h1>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -457,7 +447,9 @@ export function TotalsStrip({
 }) {
   const cells = [
     { label: 'Tổng đã nhận', value: received },
-    { label: 'Tổng đã đi', value: given },
+    // Phạm vi tường minh (MEDIUM Panel #03): tổng này gồm CẢ đi đám lẫn trả
+    // lễ — khác cột "Đi đám" theo-người ở mặt Người (chỉ tính đám đi dự).
+    { label: 'Tổng đã đi (đi đám + trả lễ)', value: given },
     { label: 'Còn giữ', value: kept },
     {
       label: pendingLabel,
@@ -481,55 +473,11 @@ export function TotalsStrip({
           luôn hiện trọn trên mobile 390px. */}
       <p className="mt-0.5 flex flex-wrap gap-x-2 font-mono text-xs tabular-nums text-muted">
         <span className="whitespace-nowrap">Đã nhận {received}</span>
-        <span className="whitespace-nowrap">− đã đi {given}</span>
+        <span className="whitespace-nowrap">− đã đi (đi đám + trả lễ) {given}</span>
         <span className="whitespace-nowrap">= còn giữ {kept}</span>
         {overGiven ? <span className="whitespace-nowrap">· đi nhiều hơn {overGiven}</span> : null}
       </p>
     </section>
-  );
-}
-
-/** Nút chia sẻ sổ: chép link chứa mã mời (menu chia sẻ do app dựng khi cần preview). */
-export function ShareBookButton({ inviteCode }: { inviteCode: string }) {
-  const [copied, setCopied] = useState(false);
-  const [fallback, setFallback] = useState<string | null>(null);
-
-  async function share() {
-    const link = `${window.location.origin}/?code=${encodeURIComponent(inviteCode)}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: 'Sổ Đám', url: link });
-        return;
-      } catch {
-        // Người dùng hủy share sheet — rơi xuống chép link.
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2500);
-    } catch {
-      setFallback(link);
-    }
-  }
-
-  return (
-    <span className="relative shrink-0">
-      <button
-        type="button"
-        onClick={() => void share()}
-        className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-[10px] px-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-        aria-label="Chia sẻ sổ cho người nhà"
-      >
-        {copied ? <Check className="size-5" /> : <Share2 className="size-5" />}
-        <span className="hidden sm:inline">{copied ? 'Đã chép link' : 'Chia sẻ'}</span>
-      </button>
-      {fallback ? (
-        <span className="absolute top-full right-0 z-10 mt-1 block w-64 rounded-lg border border-line bg-card p-2 font-mono text-xs break-all text-ink">
-          {fallback}
-        </span>
-      ) : null}
-    </span>
   );
 }
 
@@ -728,11 +676,46 @@ export function EmptyLedger({
   title,
   body,
   action,
+  variant = 'ledger',
 }: {
   title: string;
   body: string;
   action?: ReactNode;
+  /**
+   * B7 (Panel #03 / R1): minh hoạ sổ + xu vàng dùng chung cả ngữ cảnh tang
+   * là không phù hợp trang trọng. `solemn` = biến thể bát hương tông trầm
+   * (cùng tay vẽ/token hiện hữu: solemn-700 + solemn-soft, KHÔNG xu vàng,
+   * KHÔNG nét bút ăn mừng) cho mặt đám tang/giỗ và Cây họ ở ngữ cảnh đó.
+   */
+  variant?: 'ledger' | 'solemn';
 }) {
+  if (variant === 'solemn') {
+    return (
+      <div className="flex flex-col items-center px-4 py-6 text-center">
+        <svg
+          viewBox="0 0 200 132"
+          className="h-auto w-full max-w-[200px]"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          {/* Bát hương ba nén — cùng glyph kỷ luật với icon đám tang */}
+          <path d="M76 34c-3.5-5.5 3.5-8.5 0-14" stroke="#3B4054" strokeWidth="2.5" />
+          <path d="M100 30c-3.5-5.5 3.5-8.5 0-14" stroke="#3B4054" strokeWidth="2.5" />
+          <path d="M124 34c-3.5-5.5 3.5-8.5 0-14" stroke="#3B4054" strokeWidth="2.5" />
+          <path d="M76 40v26M100 36v30M124 40v26" stroke="#3B4054" strokeWidth="2.5" />
+          <path d="M52 66h96a48 30 0 0 1-96 0Z" fill="#EDEEF3" stroke="#3B4054" strokeWidth="2.5" />
+          <path d="M78 108h44" stroke="#3B4054" strokeWidth="2.5" />
+          {/* Dòng kẻ sổ trầm dưới bát hương — chờ ghi, không xu, không bút */}
+          <path d="M64 122h72" stroke="#7E85AB" strokeWidth="2.5" />
+        </svg>
+        <p className="mt-4 text-[15px] font-semibold text-ink">{title}</p>
+        <p className="mt-1 max-w-sm text-sm leading-relaxed text-muted">{body}</p>
+        {action ? <div className="mt-4">{action}</div> : null}
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col items-center px-4 py-6 text-center">
       <svg
@@ -773,118 +756,4 @@ export function EmptyLedger({
   );
 }
 
-export function Panel({
-  title,
-  description,
-  action,
-  children,
-  className,
-}: {
-  title?: string;
-  description?: string;
-  action?: ReactNode;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <section
-      className={cn(
-        'overflow-hidden rounded-xl border border-line bg-card shadow-[var(--shadow-card)]',
-        className,
-      )}
-    >
-      {(title || action) && (
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-4 py-3.5 sm:px-5">
-          <div className="min-w-0">
-            {title ? (
-              <h2 className="text-[17px] font-semibold tracking-tight text-ink">{title}</h2>
-            ) : null}
-            {description ? <p className="mt-0.5 text-sm text-muted">{description}</p> : null}
-          </div>
-          {action ? <div className="flex flex-wrap gap-2">{action}</div> : null}
-        </div>
-      )}
-      <div className="p-4 sm:p-5">{children}</div>
-    </section>
-  );
-}
-
-export function Field({
-  label,
-  error,
-  children,
-}: {
-  label: string;
-  error?: string | null;
-  children: ReactNode;
-}) {
-  return (
-    <label className="grid gap-1.5 text-ink">
-      <span className="text-sm font-medium">{label}</span>
-      {children}
-      {error ? (
-        <span role="alert" className="text-sm font-medium text-lacquer">
-          {error}
-        </span>
-      ) : null}
-    </label>
-  );
-}
-
-export function Input(props: React.ComponentProps<'input'>) {
-  return (
-    <input
-      {...props}
-      className={cn(
-        'min-h-12 w-full rounded-[10px] border border-line-strong bg-card px-3 text-base text-ink outline-none transition-colors placeholder:text-muted focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500',
-        props.className,
-      )}
-    />
-  );
-}
-
-export function Select(props: React.ComponentProps<'select'>) {
-  return (
-    <select
-      {...props}
-      className={cn(
-        'min-h-12 w-full rounded-[10px] border border-line-strong bg-card px-3 text-base text-ink outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500',
-        props.className,
-      )}
-    />
-  );
-}
-
-export function Btn({
-  children,
-  onClick,
-  variant = 'primary',
-  className,
-  type = 'button',
-  disabled,
-}: {
-  children: ReactNode;
-  onClick?: () => void;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
-  className?: string;
-  type?: 'button' | 'submit';
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type={type}
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        'inline-flex min-h-11 items-center justify-center gap-2 rounded-[10px] px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:pointer-events-none disabled:opacity-45',
-        variant === 'primary' && 'bg-indigo-700 text-white hover:bg-indigo-600',
-        variant === 'secondary' && 'border border-line-strong bg-card text-ink hover:bg-indigo-50',
-        variant === 'ghost' && 'text-indigo-700 hover:bg-indigo-50',
-        variant === 'danger' && 'bg-lacquer text-white hover:bg-lacquer/90',
-        className,
-      )}
-    >
-      {children}
-    </button>
-  );
-}
+export { Btn, Field, Input, Panel, Select } from './shell-primitives';

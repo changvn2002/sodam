@@ -184,7 +184,7 @@ export function PersonAvatar({
         className,
       )}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {/* eslint-disable-next-line @next/next/no-img-element -- src là data-URI do DiceBear sinh tại client (@dicebear/core, deterministic seed); next/image không áp dụng được cho data-URI động */}
       <img
         src={uri}
         alt=""

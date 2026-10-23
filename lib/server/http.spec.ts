@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { HttpError } from './errors';
-import { handle, INT4_MAX, optIntMin0, optString, reqIntMin0, reqString } from './http';
+import {
+  assertOnlyFields,
+  handle,
+  INT4_MAX,
+  MAX_JSON_BODY_BYTES,
+  optIntMin0,
+  optString,
+  readJson,
+  reqIntMin0,
+  reqString,
+} from './http';
 
 /**
  * Hardening tests (W4-F1 retest on the no-login build, 2026-10-23):
@@ -69,6 +79,56 @@ describe('reqString / optString — length caps', () => {
   });
 });
 
+describe('SEC-05 — readJson body cap + strict fields', () => {
+  const jsonReq = (raw: string) =>
+    new Request('http://test/api', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: raw,
+    });
+
+  it('body over the 128 KiB cap → 413 PAYLOAD_TOO_LARGE (battery grader used ~200KB)', async () => {
+    const raw = JSON.stringify({ name: 'x'.repeat(150_000) });
+    expect(new TextEncoder().encode(raw).length).toBeGreaterThan(MAX_JSON_BODY_BYTES);
+    expect(new TextEncoder().encode(raw).length).toBeLessThan(200_000);
+    try {
+      await readJson(jsonReq(raw));
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(HttpError);
+      expect((err as HttpError).status).toBe(413);
+    }
+  });
+
+  it('malformed JSON → 400 (explicit; the old path also surfaced 400 via validators)', async () => {
+    try {
+      await readJson(jsonReq('{not json'));
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(HttpError);
+      expect((err as HttpError).status).toBe(400);
+    }
+  });
+
+  it('a normal body still parses', async () => {
+    await expect(readJson(jsonReq('{"name":"Sổ"}'))).resolves.toEqual({ name: 'Sổ' });
+  });
+
+  it('assertOnlyFields: unknown fields → 400 naming the fields; allowed-only passes', () => {
+    expect(() => assertOnlyFields({ name: 'Sổ', isAdmin: true, role: 'x' }, ['name'])).toThrow(
+      HttpError,
+    );
+    try {
+      assertOnlyFields({ name: 'Sổ', isAdmin: true }, ['name']);
+      expect.unreachable();
+    } catch (err) {
+      expect((err as HttpError).status).toBe(400);
+      expect((err as HttpError).fields).toEqual(['isAdmin']);
+    }
+    expect(() => assertOnlyFields({ name: 'Sổ' }, ['name'])).not.toThrow();
+  });
+});
+
 describe('handle() — error serialization', () => {
   it('never leaks a raw Prisma/DB error: unexpected errors become a generic Vietnamese 500', async () => {
     const prismaLike = new Error(
@@ -81,16 +141,21 @@ describe('handle() — error serialization', () => {
     expect(res.status).toBe(500);
     const text = await res.text();
     for (const f of FORBIDDEN) expect(text).not.toContain(f);
-    const body = JSON.parse(text) as { message: string };
-    expect(body.message).toMatch(/máy chủ|thử lại/);
+    const body = JSON.parse(text) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('INTERNAL_ERROR');
+    expect(body.error.message).toMatch(/máy chủ|thử lại/);
+    expect(res.headers.get('cache-control')).toBe('no-store');
   });
 
-  it('HttpError keeps its own status + message (client-facing errors stay specific)', async () => {
+  it('HttpError keeps its own status + message in the unified ARC-09 shape', async () => {
     const res = await handle(async () => {
       throw new HttpError(404, 'Book not found');
     });
     expect(res.status).toBe(404);
-    expect(await res.json()).toEqual({ message: 'Book not found' });
+    expect(await res.json()).toEqual({
+      error: { code: 'NOT_FOUND', message: 'Book not found' },
+    });
+    expect(res.headers.get('cache-control')).toBe('no-store');
   });
 
   it('successful handlers still return their payload as JSON', async () => {
