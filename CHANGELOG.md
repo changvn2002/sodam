@@ -132,5 +132,5 @@ tag v1.1.0 — xem bảng cặp ở cuối file.
 
 | Phiên bản | Commit | Ngày deploy | Ghi chú |
 |---|---|---|---|
-| 1.1.0 | — | — | Chờ parent gắn tag + deploy (đợt sửa sau Panel #02/#03) |
-| 1.0.0 | `bddb9c4` | 2026-10-23 | Chưa gắn tag (quy ước tag bắt đầu từ lần phát hành kế tiếp) |
+| 1.1.0 | `cc1c42b` | 2026-10-24 | Tag v1.1.0 gắn tại commit kế tiếp (chỉ bổ sung dòng này) |
+| 1.0.0 | `bddb9c4` | 2026-10-23 | Đã gắn tag v1.0.0 |
