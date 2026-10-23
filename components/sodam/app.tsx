@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { createSodamApi, resolveSodamApiMode, type SodamApi } from './api';
 import type {
   SodamBook,
@@ -17,7 +18,7 @@ import type {
   SodamRelationType,
   SodamReturnItem,
 } from './api/types';
-import { loadToken } from '@/lib/api';
+import { clearToken, loadToken } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useSodamOffline } from './lib/offline';
 import { EVENT_KIND_LABELS, EVENT_KIND_ORDER, kindLabel } from './lib/event-kinds';
@@ -43,6 +44,7 @@ import {
   BookMarked,
   Gift,
   HandCoins,
+  LogOut,
   Users as UsersLucide,
   ArrowRight,
 } from 'lucide-react';
@@ -176,6 +178,7 @@ function navFromView(view: View): SodamNavId {
 }
 
 export function SodamApp() {
+  const router = useRouter();
   const api = useMemo(() => createSodamApi(), []);
   const mode = resolveSodamApiMode();
   const [tokenReady, setTokenReady] = useState(mode === 'mock');
@@ -222,6 +225,12 @@ export function SodamApp() {
     if (id === 'people') setView({ name: 'people', bookId });
     if (id === 'tree') setView({ name: 'tree', bookId });
   };
+
+  const handleLogout = useCallback(() => {
+    clearToken();
+    router.push('/login');
+    router.refresh();
+  }, [router]);
 
   if (!tokenReady && mode !== 'mock') {
     return (
@@ -274,6 +283,18 @@ export function SodamApp() {
       onNav={onNav}
       showBookNav={showBookNav}
       onBackHome={() => setView({ name: 'home' })}
+      headerAction={
+        mode === 'mock' ? undefined : (
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-3 text-sm text-[#FAF6EF]/85 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+          >
+            <LogOut className="size-4" />
+            Đăng xuất
+          </button>
+        )
+      }
     >
       {view.name === 'home' ? (
         <HomeView
