@@ -54,7 +54,7 @@ ran as a client module talking to a NestJS backend.
 Every screenshot below was captured from the live production deployment at
 https://sodam-tawny.vercel.app (the no-login build) with the app in a **real,
 populated state** — never an empty first-run screen. The book on screen is
-**"Sổ nhà họ Nguyễn"** (invite code `Z2Q7SJD7EXUN`), holding three events: a hosted
+**"Sổ nhà họ Nguyễn"**, holding three events: a hosted
 wedding ("Cưới con gái Minh Anh", 18 Oct 2026) with six guests, a hosted death
 anniversary ("Giỗ ông nội"), and a wedding the family attended. Two return gifts have
 already been marked as returned — one of them 200.000 ₫ more than the guest
@@ -83,7 +83,7 @@ lists the books kept on this device — each with its invite code — next to th
 create-book and join-by-code panels. Anyone with the code (or the share link) writes
 in the same book. The season card counts 106 days to Tết Nguyên đán (6 Feb 2027).
 
-![Step 1 — home: "Sổ nhà họ Nguyễn" with invite code Z2Q7SJD7EXUN, create/join panels and the wedding-season card](docs/screenshots/gallery-01-tao-so.png)
+![Step 1 — home: "Sổ nhà họ Nguyễn" book card, create/join panels and the wedding-season card](docs/screenshots/gallery-01-tao-so.png)
 
 **Step 2 — Record who gave what.** Inside an event, every guest row shows the amount
 they gave plus its own return-gift form. Settled rows are badged "Đã trả lễ":
