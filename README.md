@@ -17,7 +17,7 @@ code (or the share link) with family so everyone writes in the same book.
 Repository: https://github.com/changvn2002/sodam
 
 <p align="center">
-  <img src="docs/screenshots/sodam-desktop.png" alt="Sổ Đám — the wedding workspace of a real family book: 13.300.000 ₫ received across five events, 6.800.000 ₫ still held, 6.800.000 ₫ of returns still open" width="900">
+  <img src="docs/screenshots/sodam-desktop.png" alt="Sổ Đám — the wedding workspace of a real family book: 10.500.000 ₫ received across five events, 4.000.000 ₫ still held, 4.000.000 ₫ of returns still open" width="900">
 </p>
 <p align="center"><em>The live wedding workspace of a real family book — every guest row carries its return state, the totals strip breaks its own numbers down, and there is no sign-in anywhere.</em></p>
 
@@ -52,83 +52,83 @@ ran as a client module talking to a NestJS backend.
 ## 🖼️ Screenshots
 
 Every screenshot below was captured from the live production deployment at
-https://sodam-tawny.vercel.app (the redesign-v2 "Command Ledger" build,
-v1.2.0) with the app in a **real, populated state** — never an empty first-run
-screen. The book on screen is **"Sổ nhà họ Nguyễn"** (capture copy
-"SHOT-V111"), holding five events: a hosted wedding ("Đám cưới Minh Anh &
-Quốc Bảo", 18 Oct 2026) with six guests, a hosted funeral ("Đám tang cụ
-Nguyễn Văn An", 13 Sep 2026) with four mourners, a hosted death anniversary
-("Đám giỗ cụ Nguyễn Văn Ba", 23 Aug 2026), and two events the family attended
-— a wedding (11 Oct 2026) and a thôi nôi (20 Sep 2026). Three return gifts
-have already been marked as returned — one of them 200.000 ₫ more than the
-guest originally gave. Invite codes are never printed in this README; on the
+https://sodam-tawny.vercel.app (the v1.3.0 "Trang Sổ Kẻ" ledger redesign)
+with the app in a **real, populated state** — never an empty first-run
+screen. The book on screen is **"Sổ nhà họ Nguyễn"**, holding five events:
+a hosted wedding ("Đám cưới Minh Anh & Quốc Bảo", 18 Oct 2026) with five
+guests, a hosted funeral ("Đám tang cụ Nguyễn Văn An", 13 Sep 2026) with two
+mourners, a hosted death anniversary ("Đám giỗ cụ Nguyễn Văn Ba", 23 Aug
+2026), and two events the family attended — a thôi nôi (5 Oct 2026) and an
+engagement (11 Oct 2026). Four of the eight obligations have already been
+returned in full. Invite codes are never printed in this README; on the
 home screen the app itself only ever shows a masked code.
 
 ### The wedding workspace — ledger, totals and the breakdown
 
-![Desktop 1440×900 — wedding workspace of "Sổ nhà họ Nguyễn": six guest rows with return states, event summary 10.000.000 ₫ received, and the book totals strip with its two labelled breakdown terms](docs/screenshots/sodam-desktop.png)
+![Desktop 1440×900 — wedding workspace of "Sổ nhà họ Nguyễn": five guest rows with return states, event summary 8.800.000 ₫ received, and the book totals strip with its two labelled breakdown terms](docs/screenshots/sodam-desktop.png)
 
 _The workspace is one continuous screen: the rail on the left (Sổ → Đám → Mặt),
 the quick-entry command bar on top, and the ledger in the middle. The totals
-strip reads the whole book at a glance — 13.300.000 ₫ received ("Tổng đã nhận"),
-8.200.000 ₫ gone out ("Tổng đã đi (đi đám + trả lễ)" — attended gifts plus
-returns actually paid), 6.800.000 ₫ still held ("Còn giữ") and 6.800.000 ₫ of
-returns still open across 9 obligations ("Cần trả lễ") — and the line
+strip reads the whole book at a glance — 10.500.000 ₫ received ("Tổng đã nhận"),
+7.200.000 ₫ gone out ("Tổng đã đi (đi đám + trả lễ)" — attended gifts plus
+returns actually paid), 4.000.000 ₫ still held ("Còn giữ") and 4.000.000 ₫ of
+returns still open across 4 obligations ("Cần trả lễ") — and the line
 underneath breaks the money out into two labelled terms instead of an
 equation: 6.500.000 ₫ already laid out from what the book received
-("Đã đi trong khoản đã nhận") and 1.700.000 ₫ of over-returns plus attended
-gifts ("Trả dư + đi đám"). The wedding itself took 10.000.000 ₫ from
-6 guests; 6.000.000 ₫ of it is already settled, and every row carries its own
-return state: "Chờ trả", "Đã trả", or "Trả dư" for the guest who was returned
-more than they gave._
+("Đã đi trong khoản đã nhận") and 700.000 ₫ of attended gifts ("Đi đám").
+The wedding itself took 8.800.000 ₫ from 5 guests; 6.300.000 ₫ of it is
+already settled, and every row carries its own return state: "Chờ trả" or
+"Đã trả"._
 
 | Mobile (390×844) | Social / link-preview (1280×640) |
 | --- | --- |
-| ![Mobile — the same wedding workspace on a phone: event chips, totals and breakdown on top, guest ledger below, "Còn giữ" and the record button pinned at the bottom](docs/screenshots/sodam-mobile.png) | ![Social — 1280×640 preview frame of the wedding workspace: totals strip, event summary and the first guest rows](docs/screenshots/sodam-social.png) |
-| _On a phone the rail becomes event chips and the four faces become tabs (Tổng quan / Trả lễ / Người / Cây họ); the bottom bar keeps "Còn giữ 6.800.000 ₫" and the "Ghi khoản" button always in reach._ | _The 1280×640 frame of the same screen: the totals, the wedding summary (10.000.000 ₫ mừng, 6.000.000 ₫ đã trả) and the settled / over-given rows are visible before the app even opens._ |
+| ![Mobile — the same wedding workspace on a phone: event selector and search on top, totals and breakdown below, the guest ledger under them, and the "Ghi khoản" button pinned at the bottom](docs/screenshots/sodam-mobile.png) | ![Social — 1280×640 preview frame of the wedding workspace: totals strip, event summary and the first guest rows](docs/screenshots/sodam-social.png) |
+| _On a phone the rail becomes an event selector and the four faces become tabs (Tổng quan / Trả lễ / Người / Cây họ); the totals stay on top — "Còn giữ 4.000.000 ₫" in the strip — and the "Ghi khoản" button stays pinned at the bottom._ | _The 1280×640 frame of the same screen: the totals, the wedding summary (8.800.000 ₫ mừng, 6.300.000 ₫ đã trả) and the first guest rows are visible before the app even opens._ |
 
 ### Step by step
 
 **Step 1 — Open the app, create a book.** No account, no sign-in: the home screen
 carries the create-book / join-by-code tabs and lists the books kept on this
 device — each with its running total and a **masked** invite code (the full code
-is never shown on screen). The season card counts 106 days to Tết Nguyên đán
-(6 Feb 2027).
+is never shown on screen).
 
-![Step 1 — home: create/join tabs, the "Sổ nhà họ Nguyễn" book card with its masked invite code and 13.300.000 ₫ total, and the Tết countdown card](docs/screenshots/gallery-01-tao-so.png)
+![Step 1 — home: create/join tabs and the "Sổ nhà họ Nguyễn" book card with its masked invite code and 10.500.000 ₫ total](docs/screenshots/gallery-01-tao-so.png)
 
 **Step 2 — Record who gave what.** The entry sheet opens over the ledger: type a
 name (or dictate it on the "Giọng nói" tab), tap a quick amount chip, and the
-"Sẽ ghi:" line reads the entry back — "Dì Út — 500.000 ₫ tiền mừng" — before
+"Sẽ ghi:" line reads the entry back — "Dì Bảy — 500.000 ₫ tiền mừng" — before
 "Lưu khoản mừng" saves it. Nothing is written until that read-back looks right.
 
 ![Step 2 — the entry sheet mid-action over the wedding ledger: guest name typed, 500.000 ₫ chip chosen, the read-back line confirming the entry before it is saved](docs/screenshots/gallery-02-ghi-le.png)
 
 **Step 3 — Work the return list.** The "Trả lễ" face collects every obligation
-across all five events under one summary strip — 6.800.000 ₫ still waiting
-("Chờ trả"), 6.700.000 ₫ already returned ("Đã trả"), 200.000 ₫ given over
-("Trả dư") — with a tab per state and the amount owed shown on every row.
+across all five events under one summary strip — 4.000.000 ₫ still waiting
+("Chờ trả") across 4 obligations, 6.500.000 ₫ already returned ("Đã trả"),
+nothing given over ("Trả dư" 0 ₫) — with a tab per state and the amount owed
+shown on every row.
 
-![Step 3 — the return list: summary strip (6.800.000 ₫ waiting, 6.700.000 ₫ returned, 200.000 ₫ over-given), state tabs, and open obligations from the anniversary, the funeral and the wedding](docs/screenshots/gallery-03-tra-le.png)
+![Step 3 — the return list: summary strip (4.000.000 ₫ waiting, 6.500.000 ₫ returned, 0 ₫ over-given), state tabs, and open obligations from the wedding, the funeral and the anniversary](docs/screenshots/gallery-03-tra-le.png)
 
 **Step 4 — A funeral speaks a different language.** The same workspace, a
 completely different voice: the funeral of cụ Nguyễn Văn An totals
-"Tổng phúng viếng" — 2.300.000 ₫ from 4 "người viếng" (mourners) — its summary
-tracks what has been returned as "Đã đi lại" (500.000 ₫ so far), and no wedding
-vocabulary appears anywhere on the screen. The solar date (13/9/2026) is shown
+"Tổng phúng viếng" — 700.000 ₫ from 2 "người viếng" (mourners) — its summary
+tracks what has been returned as "Đã đi lại" (200.000 ₫ so far), and no wedding
+vocabulary appears anywhere in the funeral's own ledger. The solar date (13/9/2026) is shown
 together with its Vietnamese lunar date (3/8 âm lịch).
 
-![Step 4 — the funeral workspace in its solemn voice: "Tổng phúng viếng" 2.300.000 ₫, four mourners listed as "Người viếng", lunar date 3/8 âm lịch](docs/screenshots/gallery-04-tong-ket-su-kien.png)
+![Step 4 — the funeral workspace in its solemn voice: "Tổng phúng viếng" 700.000 ₫, two mourners listed as "Người viếng", lunar date 3/8 âm lịch](docs/screenshots/gallery-04-tong-ket-su-kien.png)
 
 **Step 5 — Every person, both directions.** The "Người" face totals each
 relationship across all events, with every flow labelled — "Nhận" (received),
 "Đi đám" (given at events the family attended) and "Trả lễ" (actually returned).
-Ông bà ngoại are fully settled (5.000.000 ₫ received, 5.000.000 ₫ returned);
-Cô Tư was returned 1.700.000 ₫ against 1.500.000 ₫ received, so her row reads
-"Đã trả lễ — Trả dư" instead of claiming a balance she no longer owes. What the
+Cô Tư is fully settled — 1.200.000 ₫ across the wedding and the funeral, all of
+it returned — and so is Chú Ba (300.000 ₫ received, 300.000 ₫ returned). Anh Hùng still
+owes both of his: 500.000 ₫ from the wedding and 500.000 ₫ from the funeral.
+The hosts of the two attended events appear with their "Đã đi đám" totals —
+Chị Lan 500.000 ₫, Anh Tuấn 200.000 ₫. What the
 book owes and what it is owed is visible per person, not just per event.
 
-![Step 5 — the People face: seven people with labelled two-way totals (Nhận / Đi đám / Trả lễ) and their return state, from Ông bà ngoại fully settled to Cô Tư returned 200.000 ₫ over](docs/screenshots/gallery-05-nguoi.png)
+![Step 5 — the People face: eight people with labelled two-way totals (Nhận / Đi đám / Trả lễ) and their return state, from Cô Tư fully settled to Anh Hùng still owing both of his](docs/screenshots/gallery-05-nguoi.png)
 
 ## 🛠️ Tech stack
 
