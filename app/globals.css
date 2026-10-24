@@ -6,46 +6,57 @@
 @source "../app";
 
 /*
- * Sổ Đám — "The Command Ledger". Token normative theo DESIGN.md:
- * chàm là màu hệ thống duy nhất; sơn mài chỉ cho tiền đi / cảnh báo phá hủy;
- * mọi số tiền dùng IBM Plex Mono. Bề mặt phẳng tuyệt đối, không nền chuyển màu trang trí.
+ * Sổ Đám — B′ «Trang Sổ Kẻ» (REDESIGN vòng local 2026-10-24, hướng thắng B 4/5).
+ * Giấy TRẮNG tuyệt đối, mực đen #1F2328 là màu chính; accent duy nhất
+ * GitHub Primer #0969DA CHỈ ở vai: link, focus, trạng thái chọn, caret,
+ * dấu mực nhỏ. Nút hành động chính = mực đen. Tang/giỗ = 0 accent tuyệt đối
+ * (accent của tang do lớp bề mặt tự tắt — token nhóm solemn/memorial là
+ * xám trung tính). Số tiền luôn IBM Plex Mono, không co dưới 15px ở cột số.
+ * Tên token giữ nguyên hệ cũ (indigo-*) để mọi class hiện hữu map sang hệ B′:
+ *   indigo-700/500 = accent #0969DA · indigo-50 = nền mềm #F6F8FA ·
+ *   indigo-950 = mực #1F2328 · lacquer = danger Primer #D1242F (chỉ phá huỷ).
  */
 :root {
   color-scheme: light;
   --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
-  --indigo-950: #161a3d;
-  --indigo-900: #1e2456;
-  --indigo-800: #28306e;
-  --indigo-700: #323c85;
-  --indigo-600: #414da3;
-  --indigo-500: #5b67b8;
-  --indigo-100: #d8dcf2;
-  --indigo-50: #f0f1f8;
+  --indigo-950: #1f2328;
+  --indigo-900: #24292f;
+  --indigo-800: #32383f;
+  --indigo-700: #0969da;
+  --indigo-600: #0550ae;
+  --indigo-500: #0969da;
+  --indigo-100: #d8dee4;
+  --indigo-50: #f6f8fa;
 
-  --solemn-700: #3b4054;
-  --solemn-soft: #edeef3;
-  --memorial-700: #54452a;
-  --memorial-soft: #fbf6ea;
+  --solemn-700: #454c54;
+  --solemn-soft: #f6f8fa;
+  --memorial-700: #454c54;
+  --memorial-soft: #f6f8fa;
 
-  --paper: #f5f5f7;
+  /* Điểm chạm ấm DUY NHẤT của hệ (ghế 5 kê đơn, parent chuẩn y trước phát
+   * hành): đất nung trầm cho riêng kicker «ĐÁM HỶ». Đo trên nền trắng
+   * #FFFFFF: 6,15:1. Cấm dùng ở mọi mặt tang/giỗ và chrome chung. */
+  --hy-ink: #9c4a1f;
+
+  --paper: #ffffff;
   --card: #ffffff;
-  --ink: #17192b;
-  --muted: #565b73;
-  --line: #dfe1ec;
-  --line-strong: #7e85ab;
-  --lacquer: #b3352c;
-  --gold: #c9a24b;
-  --gold-ink: #7a5a14;
-  --gold-soft: #f3e5c3;
-  --amber-ink: #7c4a03;
-  --amber-soft: #fbf0d9;
-  --green-ink: #1e7a46;
-  --cream: #f7f3e8;
+  --ink: #1f2328;
+  --muted: #59636e;
+  --line: #d8dee4;
+  --line-strong: #7a828b;
+  --lacquer: #d1242f;
+  --gold: #8c959f;
+  --gold-ink: #59636e;
+  --gold-soft: #eaeef2;
+  --amber-ink: #59636e;
+  --amber-soft: #eaeef2;
+  --green-ink: #1f2328;
+  --cream: #ffffff;
 
-  --shadow-card: 0 1px 2px rgba(23, 25, 43, 0.05), 0 8px 24px rgba(23, 25, 43, 0.06);
-  --shadow-lift: 0 2px 4px rgba(23, 25, 43, 0.06), 0 16px 40px rgba(23, 25, 43, 0.1);
+  --shadow-card: 0 0 0 rgba(31, 35, 40, 0);
+  --shadow-lift: 0 2px 6px rgba(31, 35, 40, 0.08), 0 12px 32px rgba(31, 35, 40, 0.12);
 
   --popover: var(--card);
   --popover-foreground: var(--ink);
@@ -55,13 +66,13 @@
   --accent-foreground: var(--card);
   --background: var(--paper);
   --foreground: var(--ink);
-  --primary: var(--indigo-700);
+  --primary: var(--ink);
   --primary-foreground: var(--card);
   --secondary: var(--indigo-50);
   --secondary-foreground: var(--ink);
   --input: var(--line-strong);
   --ring: var(--indigo-500);
-  --radius: 0.75rem;
+  --radius: 0.4375rem;
 }
 
 @theme inline {
@@ -77,6 +88,7 @@
   --color-solemn-soft: var(--solemn-soft);
   --color-memorial-700: var(--memorial-700);
   --color-memorial-soft: var(--memorial-soft);
+  --color-hy-ink: var(--hy-ink);
   --color-paper: var(--paper);
   --color-card: var(--card);
   --color-ink: var(--ink);
@@ -123,7 +135,21 @@ body {
   overflow-x: hidden;
 }
 
-/* Motion inventory (DESIGN.md) — chỉ transform/opacity, đúng thời lượng đã khai. */
+/* Kẻ đôi đóng sổ (B′): dưới kẻ đôi, số không đổi. */
+.double-rule-t {
+  border-top: 3px double var(--ink);
+}
+.double-rule-b {
+  border-bottom: 3px double var(--ink);
+}
+
+/* Masthead sổ: kẻ dày + kẻ mảnh song song như đầu trang sổ in. */
+.masthead-rule {
+  border-bottom: 2px solid var(--ink);
+  box-shadow: 0 3px 0 -2px var(--ink);
+}
+
+/* Motion inventory — chỉ transform/opacity, đúng thời lượng đã khai. */
 @keyframes sheet-in {
   from {
     opacity: 0;

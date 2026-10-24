@@ -17,7 +17,7 @@ export function OfflineBanner({ online }: { online: boolean }) {
     <div
       role="status"
       className="sticky top-0 z-40 flex min-h-11 items-center justify-center gap-2 px-4 py-2 text-center text-sm font-medium text-white"
-      style={{ backgroundColor: '#161A3D' }}
+      style={{ backgroundColor: '#1F2328' }}
     >
       <WifiOff className="size-4 shrink-0" aria-hidden />
       <span>Đang offline — kiểm tra kết nối mạng.</span>
@@ -47,7 +47,7 @@ export function OutboxChip({
   const style = {
     backgroundColor: '#F0F1F8',
     borderColor: '#7E85AB',
-    color: failed ? '#B3352C' : '#323C85',
+    color: failed ? '#D1242F' : '#1F2328',
   } as const;
 
   if (failed) {

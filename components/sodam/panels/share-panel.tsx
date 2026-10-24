@@ -36,7 +36,16 @@ export function SharePanel({
   const [revealed, setRevealed] = useState(false);
   const [rotateStage, setRotateStage] = useState<'idle' | 'confirm' | 'busy'>('idle');
   const [justRotated, setJustRotated] = useState(false);
-  const link = `${window.location.origin}/?code=${encodeURIComponent(book.inviteCode)}`;
+  // TC5-3 (Panel #05, MINOR bảo mật): TRƯỚC cổng «Tôi hiểu…» không node
+  // visible nào được chứa ≥8 ký tự liên tiếp của mã — chỉ dạng che, tối đa
+  // 4 ký tự đuôi; chọn-bôi cũng không thu được mã vì DOM chỉ chứa bản che.
+  // Sau cổng: mã đầy đủ hiện theo NHÓM 4 (F6) + nút chép mang link trọn.
+  const last4 = book.inviteCode.replace(/\s/g, '').slice(-4);
+  const maskedCode = `•••• •••• •••• ${last4}`;
+
+  // F6: mã hiển thị theo NHÓM 4 ký tự, mỗi nhóm là một khối không vỡ —
+  // link không còn ngắt dòng giữa mã; người đọc/ghi lại theo nhóm được.
+  const codeGroups = (revealed ? formatInviteCode(book.inviteCode) : maskedCode).split(' ');
 
   const doRotate = async () => {
     setRotateStage('busy');
@@ -58,25 +67,32 @@ export function SharePanel({
       <span className="block text-sm font-medium text-ink">Chia sẻ sổ «{book.name}»</span>
 
       {justRotated ? (
-        <span
-          className="mt-2 block rounded-[10px] bg-indigo-50 px-3 py-2.5 text-sm text-indigo-700"
-          role="status"
-        >
-          Đã đổi mã mời. Mã mới{' '}
-          <span className="font-mono font-semibold">{formatInviteCode(book.inviteCode)}</span> — chỉ
+        <span className="mt-2 block border-y border-line py-2.5 text-sm text-ink" role="status">
+          Đã đổi mã mời. Mã mới <span className="font-mono font-semibold">{maskedCode}</span> — chỉ
           thiết bị này biết; muốn chia sẻ tiếp phải qua cảnh báo dưới đây một lần nữa.
         </span>
       ) : null}
 
-      {/* Lớp xem trước: đúng thứ người nhận sẽ bấm vào. */}
-      <span className="mt-2 block rounded-[10px] border border-line bg-paper px-3 py-2.5">
-        <span className="block text-xs text-muted">Link sẽ gửi đi</span>
-        <span className="mt-0.5 block font-mono text-xs break-all text-ink">{link}</span>
-        <span className="mt-1.5 block text-xs text-muted">
-          Mã mời{' '}
-          <span className="font-mono font-medium text-ink">
-            {formatInviteCode(book.inviteCode)}
-          </span>
+      {/* F6: PHẲNG HOÁ — bỏ card lồng trong panel. Link/mã nằm trên một
+          khối phẳng ngăn bằng kẻ trên/dưới như một dòng sổ.
+          Lớp xem trước: TRƯỚC cổng chỉ là bản CHE của đúng link sẽ gửi
+          (TC5-3); sau cổng mới hiện link + mã đầy đủ để đối chiếu khi chép.
+          Mã luôn hiện NGUYÊN KHỐI theo nhóm 4, không vỡ giữa mã: phần
+          gốc link nằm một dòng riêng, mã nằm dòng riêng theo nhóm. */}
+      <span className="mt-3 block border-y border-line py-3">
+        <span className="block text-xs font-medium text-muted">Link sẽ gửi đi</span>
+        <span className="mt-1 block font-mono text-xs text-ink">
+          {window.location.origin}/?code=
+        </span>
+        <span className="mt-1 flex flex-wrap gap-x-2.5 font-mono text-[15px] font-semibold text-ink">
+          {codeGroups.map((g, i) => (
+            <span key={i} className="whitespace-nowrap">
+              {g}
+            </span>
+          ))}
+        </span>
+        <span className="mt-2 block text-xs text-muted">
+          Mã mời — đọc theo từng nhóm 4 ký tự như trên.
         </span>
       </span>
 
@@ -129,9 +145,9 @@ export function SharePanel({
           <button
             type="button"
             onClick={() => setRotateStage('confirm')}
-            className="inline-flex min-h-11 items-center rounded-[10px] px-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            className="inline-flex min-h-11 items-center rounded-[7px] border border-line-strong px-3 text-sm font-bold text-ink transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
-            Mã đã bị lộ? Đổi mã mời
+            Mã đã bị lộ? Đổi mã mới
           </button>
         )}
       </span>
@@ -146,7 +162,7 @@ function InviteShareRow({ inviteCode }: { inviteCode: string }) {
     <span className="block">
       <button
         type="button"
-        className="inline-flex min-h-11 items-center gap-2 rounded-[10px] bg-indigo-700 px-4 text-sm font-medium text-white transition-colors hover:bg-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        className="inline-flex min-h-11 items-center gap-2 rounded-[7px] bg-ink px-4 text-sm font-medium text-white transition-colors hover:bg-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         onClick={() => {
           const link = `${window.location.origin}/?code=${encodeURIComponent(inviteCode)}`;
           void (async () => {

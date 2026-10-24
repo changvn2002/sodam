@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { SodamApi } from '../api';
 import type { SodamEventKind, SodamPerson, SodamRelation, SodamRelationType } from '../api/types';
-import { cn } from '@/lib/utils';
 import { groupOfKind, relationOrderForGroup } from '../lib/lexicon';
 import { Btn, EmptyLedger, Field, Select, Sheet } from '../shell';
 import { PersonAvatar } from '../ui/avatar';
@@ -39,6 +38,9 @@ export function TreeFace({
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmRelId, setConfirmRelId] = useState<string | null>(null);
+  // F4: xoá quan hệ CHA MẸ cần nấc xác nhận nặng hơn — phải tự tay
+  // đánh dấu «đã hiểu» mới mở nút xoá (xem hộp xác nhận bên dưới).
+  const [parentAck, setParentAck] = useState(false);
   const deleteDescId = useId();
   const [relBusy, setRelBusy] = useState(false);
 
@@ -77,6 +79,69 @@ export function TreeFace({
 
   const nameOf = (id: string) => people.find((p) => p.id === id)?.displayName ?? id;
 
+  /* F4 (Panel R1): CÂY HỌ PHẢI LÀ CÂY — xếp người theo THẾ HỆ suy từ
+     quan hệ đã ghi: Cha mẹ ở thế hệ trên, con xuống một thế hệ, anh
+     chị em / vợ chồng ngang thế hệ. «Ông bà …» là bậc trên cùng, tách
+     hẳn một thế hệ riêng dù chưa ghi quan hệ nào cho mục đó (tên gọi
+     đã nói rõ bậc). Người chưa có quan hệ nào xếp ở thế hệ nền và ghi
+     rõ «chưa ghi quan hệ». */
+  const generationOf = (() => {
+    const gen = new Map<string, number>(people.map((p) => [p.id, 0]));
+    for (let pass = 0; pass < people.length + 1; pass += 1) {
+      let changed = false;
+      for (const r of relations) {
+        const from = gen.get(r.fromPersonId) ?? 0;
+        const to = gen.get(r.toPersonId) ?? 0;
+        if (r.type === 'PARENT' && to !== from + 1) {
+          gen.set(r.toPersonId, from + 1);
+          changed = true;
+        } else if (r.type === 'CHILD' && from !== to + 1) {
+          gen.set(r.fromPersonId, to + 1);
+          changed = true;
+        } else if (
+          (r.type === 'SIBLING' || r.type === 'SPOUSE' || r.type === 'OTHER') &&
+          to !== from
+        ) {
+          const shared = Math.min(from, to);
+          gen.set(r.fromPersonId, shared);
+          gen.set(r.toPersonId, shared);
+          changed = true;
+        }
+      }
+      if (!changed) break;
+    }
+    const others = people.filter((p) => !/ông bà/i.test(p.displayName));
+    const baseMin = others.length > 0 ? Math.min(...others.map((p) => gen.get(p.id) ?? 0)) : 0;
+    for (const p of people) {
+      if (/ông bà/i.test(p.displayName)) gen.set(p.id, baseMin - 1);
+    }
+    return gen;
+  })();
+  const generationGroups = (() => {
+    const byGen = new Map<number, SodamPerson[]>();
+    for (const p of people) {
+      const g = generationOf.get(p.id) ?? 0;
+      byGen.set(g, [...(byGen.get(g) ?? []), p]);
+    }
+    return [...byGen.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([gen, members]) => ({ gen, members }));
+  })();
+  const relationPrefix = (type: SodamRelation['type']): string => {
+    switch (type) {
+      case 'PARENT':
+        return 'Cha mẹ của';
+      case 'CHILD':
+        return 'Con của';
+      case 'SIBLING':
+        return 'Anh chị em với';
+      case 'SPOUSE':
+        return 'Vợ chồng với';
+      default:
+        return 'Họ hàng với';
+    }
+  };
+
   const removeRelation = async (relation: SodamRelation) => {
     setRelBusy(true);
     try {
@@ -109,74 +174,119 @@ export function TreeFace({
       <h2 className="sr-only">Cây họ</h2>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted">
-          {people.length} người · {relations.length} quan hệ đã gắn
+          {people.length} người · {relations.length} quan hệ đã ghi
         </p>
         <div className="flex gap-2">
           <Btn variant="secondary" onClick={() => setListOpen(true)}>
-            Quan hệ đã gắn
+            Quan hệ đã ghi
           </Btn>
           <Btn disabled={people.length < 2} onClick={() => setAttachOpen(true)}>
-            <Plus className="size-4" aria-hidden /> Gắn quan hệ
+            <Plus className="size-4" aria-hidden /> Ghi quan hệ
           </Btn>
         </div>
       </div>
 
       {people.length === 0 ? (
-        <div className="mt-4 rounded-xl border border-line bg-card">
+        <div className="mt-4 rounded-[7px] border border-line bg-card">
           <EmptyLedger
             variant={contextGroup === 'solemn' || contextGroup === 'memorial' ? 'solemn' : 'ledger'}
             title="Chưa có ai trong sổ"
-            body="Ghi khoản đầu tiên — mỗi người được ghi sẽ hiện ở đây để gắn quan hệ."
+            body="Ghi khoản đầu tiên — mỗi người được ghi sẽ hiện ở đây để ghi quan hệ."
           />
         </div>
       ) : (
-        <div
-          className={cn(
-            'mt-4 overflow-auto rounded-xl border border-line bg-card p-4',
-            relations.length === 0 ? 'flex min-h-[42dvh] flex-col justify-center' : 'max-h-[58dvh]',
-          )}
-        >
-          <div className="flex min-w-[560px] flex-wrap gap-2">
-            {people.map((p) => (
-              <span
-                key={p.id}
-                className="inline-flex items-center gap-2 rounded-full border border-line bg-paper py-1.5 pr-3 pl-1.5"
+        <div className="mt-4 overflow-y-auto border-y border-line">
+          {/* Cây thật: từng THẾ HỆ là một tầng riêng, thụt cấp sâu dần
+              theo đời, người trong tầng nối xuống quan hệ của mình bằng
+              đường kẻ dọc + nhánh ngang. Không chip-cloud. */}
+          {generationGroups.map((group, gi) => {
+            const hasGrandparents = group.members.some((p) => /ông bà/i.test(p.displayName));
+            return (
+              <section
+                key={group.gen}
+                aria-label={`Thế hệ ${gi + 1}`}
+                className="border-b border-line py-3 last:border-b-0"
               >
-                <PersonAvatar name={p.displayName} seed={p.id} size="sm" />
-                <span className="text-sm font-medium">{p.displayName}</span>
-              </span>
-            ))}
-          </div>
-          {relations.length > 0 ? (
-            <ul className="mt-4 space-y-1.5">
-              {relations.slice(0, 12).map((r) => (
-                <li key={r.id} className="text-sm text-muted">
-                  <span className="font-medium text-ink">{nameOf(r.fromPersonId)}</span>
-                  {' — '}
-                  {RELATION_LABELS[r.type] ?? r.type}
-                  {' — '}
-                  <span className="font-medium text-ink">{nameOf(r.toPersonId)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-4">
+                <h3 className="font-mono text-[11px] font-semibold tracking-[0.16em] text-muted uppercase">
+                  Thế hệ {gi + 1}
+                  {hasGrandparents ? ' · Ông bà' : gi === 0 ? ' · Bề trên' : ''}
+                </h3>
+                <ul className="mt-2 space-y-3" style={{ marginLeft: `${gi * 20}px` }}>
+                  {group.members.map((p) => {
+                    const outgoing = relations.filter((r) => r.fromPersonId === p.id);
+                    const incoming = relations.filter((r) => r.toPersonId === p.id);
+                    return (
+                      <li key={p.id} className="flex gap-3">
+                        <PersonAvatar name={p.displayName} seed={p.id} size="md" />
+                        <div className="min-w-0 flex-1 border-l-2 border-line pl-3">
+                          <p className="text-[15px] leading-snug font-semibold [overflow-wrap:anywhere] text-ink">
+                            {p.displayName}
+                          </p>
+                          {outgoing.map((r) => (
+                            <p
+                              key={r.id}
+                              className="mt-1 flex items-baseline gap-2 text-sm text-muted"
+                            >
+                              <span
+                                aria-hidden
+                                className="inline-block h-2 w-4 shrink-0 translate-y-[-2px] border-b-2 border-l-2 border-line-strong"
+                              />
+                              <span>
+                                {relationPrefix(r.type)}{' '}
+                                <span className="font-medium whitespace-nowrap text-ink">
+                                  {nameOf(r.toPersonId)}
+                                </span>
+                              </span>
+                            </p>
+                          ))}
+                          {incoming
+                            .filter((r) => r.type === 'CHILD')
+                            .map((r) => (
+                              <p
+                                key={r.id}
+                                className="mt-1 flex items-baseline gap-2 text-sm text-muted"
+                              >
+                                <span
+                                  aria-hidden
+                                  className="inline-block h-2 w-4 shrink-0 translate-y-[-2px] border-b-2 border-l-2 border-line-strong"
+                                />
+                                <span>
+                                  Cha mẹ của{' '}
+                                  <span className="font-medium whitespace-nowrap text-ink">
+                                    {nameOf(r.fromPersonId)}
+                                  </span>
+                                </span>
+                              </p>
+                            ))}
+                          {outgoing.length === 0 && incoming.length === 0 ? (
+                            <p className="mt-0.5 text-xs text-muted">Chưa ghi quan hệ nào.</p>
+                          ) : null}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            );
+          })}
+          {relations.length === 0 ? (
+            <div className="flex flex-wrap items-center gap-3 py-4">
               <p className="min-w-0 flex-1 text-sm leading-relaxed text-muted">
                 {people.length >= 2
-                  ? 'Chưa gắn quan hệ nào. Gắn quan hệ để các khoản qua lại tự xếp theo từng nhánh họ.'
-                  : 'Cần ít nhất hai người mới gắn được quan hệ — ghi khoản cho thêm một người nữa là gắn được.'}
+                  ? 'Chưa ghi quan hệ nào. Ghi quan hệ để các khoản qua lại tự xếp theo từng nhánh họ.'
+                  : 'Cần ít nhất hai người mới ghi được quan hệ — ghi khoản cho thêm một người nữa là ghi được.'}
               </p>
               {people.length >= 2 ? (
                 <Btn variant="secondary" onClick={() => setAttachOpen(true)}>
-                  <Plus className="size-4" aria-hidden /> Gắn quan hệ đầu tiên
+                  <Plus className="size-4" aria-hidden /> Ghi quan hệ đầu tiên
                 </Btn>
               ) : null}
             </div>
-          )}
+          ) : null}
         </div>
       )}
 
-      <Sheet open={attachOpen} title="Gắn quan hệ" onClose={() => setAttachOpen(false)}>
+      <Sheet open={attachOpen} title="Ghi quan hệ" onClose={() => setAttachOpen(false)}>
         <div className="space-y-3">
           <Field label="Từ người">
             <Select value={fromId} onChange={(e) => setFromId(e.target.value)}>
@@ -224,38 +334,44 @@ export function TreeFace({
                   await reload();
                   setAttachOpen(false);
                 })
-                .catch((e: Error) => onError(friendlyError(e, 'Gắn quan hệ lỗi')))
+                .catch((e: Error) => onError(friendlyError(e, 'Ghi quan hệ lỗi')))
                 .finally(() => setBusy(false));
             }}
           >
-            Gắn quan hệ
+            Ghi quan hệ
           </Btn>
         </div>
       </Sheet>
 
-      <Sheet open={listOpen} title="Quan hệ đã gắn" onClose={() => setListOpen(false)}>
+      <Sheet open={listOpen} title="Quan hệ đã ghi" onClose={() => setListOpen(false)}>
         {relations.length === 0 ? (
           <EmptyLedger
             title="Chưa có quan hệ nào"
-            body="Bấm Gắn quan hệ để nối hai người đầu tiên trong cây họ."
+            body="Bấm Ghi quan hệ để nối hai người đầu tiên trong cây họ."
           />
         ) : (
-          <ul className="max-h-[56dvh] divide-y divide-line overflow-y-auto rounded-xl border border-line">
+          <ul className="max-h-[56dvh] divide-y divide-line overflow-y-auto rounded-[7px] border border-line">
             {relations.map((r) => (
               <li key={r.id} className="px-3.5 py-2.5 text-sm">
-                <div className="flex min-h-12 items-center gap-2">
+                {/* F15 (Panel R1): tên người KHÔNG bẻ giữa tên («Bác /
+                    Bảy») — hàng cho phép xuống dòng GIỮA các khối, tên
+                    từng người là một khối không vỡ (whitespace-nowrap). */}
+                <div className="flex min-h-12 flex-wrap items-center gap-x-2 gap-y-1.5">
                   <PersonAvatar name={nameOf(r.fromPersonId)} seed={r.fromPersonId} size="sm" />
-                  <span className="font-medium">{nameOf(r.fromPersonId)}</span>
-                  <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
+                  <span className="font-medium whitespace-nowrap">{nameOf(r.fromPersonId)}</span>
+                  <span className="shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-ink">
                     {RELATION_LABELS[r.type] ?? r.type}
                   </span>
                   <PersonAvatar name={nameOf(r.toPersonId)} seed={r.toPersonId} size="sm" />
-                  <span className="font-medium">{nameOf(r.toPersonId)}</span>
+                  <span className="font-medium whitespace-nowrap">{nameOf(r.toPersonId)}</span>
                   <Btn
                     variant="ghost"
                     className="ml-auto shrink-0 text-lacquer hover:bg-lacquer/5"
-                    aria-label={`Xoá quan hệ giữa ${nameOf(r.fromPersonId)} và ${nameOf(r.toPersonId)}`}
-                    onClick={() => setConfirmRelId(r.id)}
+                    aria-label={`Xoá quan hệ ${RELATION_LABELS[r.type] ?? r.type} giữa ${nameOf(r.fromPersonId)} và ${nameOf(r.toPersonId)}`}
+                    onClick={() => {
+                      setConfirmRelId(r.id);
+                      setParentAck(false);
+                    }}
                   >
                     <Trash2 className="size-4" aria-hidden />
                   </Btn>
@@ -272,13 +388,38 @@ export function TreeFace({
                       và {nameOf(r.toPersonId)}? Cây họ sẽ không còn nối hai người này — các khoản
                       lễ trong sổ không thay đổi.
                     </p>
+                    {/* F4: quan hệ CHA MẸ là việc nặng trong họ — thêm
+                        một nấc xác nhận riêng: phải tự tay đánh dấu đã
+                        hiểu mới mở được nút xoá. Quan hệ thường giữ
+                        một nấc như cũ. Câu trấn an về khoản lễ ở trên
+                        giữ nguyên từng chữ. */}
+                    {r.type === 'PARENT' ? (
+                      <div className="mt-2.5 border-t border-line pt-2.5">
+                        <p className="text-sm font-semibold text-ink">
+                          Đây là quan hệ cha mẹ — xin cân nhắc thêm một lần.
+                        </p>
+                        <p className="mt-1 text-sm text-muted">
+                          Xoá quan hệ này sẽ cắt nhánh cha mẹ — con trong cây họ; muốn nối lại phải
+                          ghi lại từ đầu.
+                        </p>
+                        <label className="mt-2 flex min-h-11 cursor-pointer items-center gap-2.5 text-sm font-medium text-ink">
+                          <input
+                            type="checkbox"
+                            checked={parentAck}
+                            onChange={(e) => setParentAck(e.target.checked)}
+                            className="size-5 shrink-0 accent-[#D1242F]"
+                          />
+                          Tôi đã hiểu và vẫn muốn xoá quan hệ cha mẹ này
+                        </label>
+                      </div>
+                    ) : null}
                     <div className="mt-2.5 flex gap-2">
                       <Btn
                         variant="danger"
-                        disabled={relBusy}
+                        disabled={relBusy || (r.type === 'PARENT' && !parentAck)}
                         onClick={() => void removeRelation(r)}
                       >
-                        Xoá hẳn
+                        {r.type === 'PARENT' ? 'Xoá hẳn quan hệ cha mẹ' : 'Xoá hẳn'}
                       </Btn>
                       <Btn variant="secondary" onClick={() => setConfirmRelId(null)}>
                         Huỷ

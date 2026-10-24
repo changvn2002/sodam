@@ -7,7 +7,7 @@
  * by the IndexedDB outbox in components/sodam/lib/offline.ts.
  */
 
-const CACHE = 'sodam-shell-v3';
+const CACHE = 'sodam-shell-v4';
 
 const PRECACHE_URLS = [
   '/',

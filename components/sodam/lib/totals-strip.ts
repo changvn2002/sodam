@@ -41,7 +41,19 @@ export function totalsTerms(totals: SodamDashboardTotals): TotalsTerm[] {
   }
   const outPool = totals.givenVnd - settled;
   if (outPool > 0) {
-    terms.push({ key: 'out-pool', label: 'Trả dư + đi đám', valueVnd: outPool });
+    // TC5-4 (Panel #05, MINOR tầng chữ): nhãn hạng 2 theo TRẠNG THÁI.
+    // out-pool = A + O từng đồng, với O = overGivenVnd (trả dư) và
+    // A = outPool − O (đi đám ATTENDED). O = 0 → chỉ «Đi đám»;
+    // A = 0 → chỉ «Trả dư»; cả hai > 0 → giữ nguyên văn «Trả dư + đi đám».
+    // overGivenVnd thiếu (payload cũ) → không khẳng định được thành phần,
+    // giữ nhãn ghép trung tính như trước.
+    const over = totals.overGivenVnd;
+    let label = 'Trả dư + đi đám';
+    if (over != null) {
+      if (over <= 0) label = 'Đi đám';
+      else if (outPool - over <= 0) label = 'Trả dư';
+    }
+    terms.push({ key: 'out-pool', label, valueVnd: outPool });
   }
   return terms;
 }

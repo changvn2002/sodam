@@ -4,8 +4,7 @@ import { useEffect, useState } from 'react';
 import type { SodamApi } from '../api';
 import type { SodamBook } from '../api/types';
 import { knownBooks } from '../lib/book-store';
-import { solarToLunar } from '../lib/lunar';
-import { Btn, EmptyLedger, Field, Input, SegmentedTabs, formatInviteCode } from '../shell';
+import { Btn, EmptyLedger, Field, Input, LedgerTabs, formatInviteCode } from '../shell';
 import { BookAvatar } from '../ui/avatar';
 import { OfflineBanner } from '../ui/offline-ui';
 import InfoSections from '@/components/seo/InfoSections';
@@ -99,7 +98,7 @@ export function HomeView({
   return (
     <div className="min-h-dvh bg-paper text-ink">
       <div className="mx-auto w-full max-w-2xl px-4 py-5 sm:px-6">
-        <header className="flex min-h-14 items-center gap-3">
+        <header className="masthead-rule flex min-h-14 items-center gap-3 pb-2">
           {/* eslint-disable-next-line @next/next/no-img-element -- logo là SVG tĩnh trong public/ (asset nội bộ cố định); next/image không tối ưu SVG nên <img> thẳng là đúng */}
           <img
             src="/products/brand/sodam-logo.svg"
@@ -108,7 +107,9 @@ export function HomeView({
             height={40}
             className="size-10 shrink-0 rounded-[10px]"
           />
-          <p className="flex-1 text-[17px] font-semibold">Sổ Đám</p>
+          <p className="flex-1 font-mono text-[17px] font-bold tracking-[0.18em] uppercase">
+            Sổ<span className="text-indigo-700">·</span>Đám
+          </p>
           <span className="relative">
             <button
               type="button"
@@ -132,7 +133,8 @@ export function HomeView({
         </h1>
 
         <div className="mt-5">
-          <SegmentedTabs
+          {/* W4-2: bỏ segmented-pill ở mặt tiền — chữ trần + gạch mực (LedgerTabs). */}
+          <LedgerTabs
             ariaLabel="Tạo sổ hoặc vào bằng mã"
             value={tab}
             onChange={setTab}
@@ -184,11 +186,22 @@ export function HomeView({
                 value={formatInviteCode(code)}
                 onChange={(e) => setCode(e.target.value.replace(/\s/g, '').toUpperCase())}
                 placeholder="VD: A1B2 C3D4 E5F6 G7H8"
-                className="font-mono tracking-wide uppercase"
+                // F11 (Panel R1): khi có lỗi, VIỀN Ô theo lỗi (đỏ) —
+                // không để viền focus xanh dương đánh nhau với dòng lỗi.
+                className={
+                  joinError
+                    ? 'border-lacquer font-mono tracking-wide uppercase focus:border-lacquer focus:ring-lacquer'
+                    : 'font-mono tracking-wide uppercase'
+                }
+                style={joinError ? { borderColor: '#D1242F' } : undefined}
+                aria-invalid={joinError ? true : undefined}
                 autoComplete="off"
               />
             </Field>
-            <p className="text-sm text-muted">Mở link chia sẻ là vào thẳng, không cần nhập mã.</p>
+            <p className="text-sm text-muted">
+              Mã gồm 16 ký tự, tự tách nhóm 4 cho dễ đọc — dán nguyên mã vào cũng được. Mở link chia
+              sẻ là vào thẳng, không cần nhập mã.
+            </p>
             <Btn type="submit" disabled={busy} className="min-h-12 w-full">
               Vào sổ
             </Btn>
@@ -210,14 +223,14 @@ export function HomeView({
             <span className="font-normal text-muted">({shownBooks.length})</span>
           </h2>
           {shownBooks.length === 0 ? (
-            <div className="mt-2 rounded-xl border border-line bg-card">
+            <div className="mt-2 rounded-[7px] border border-line bg-card">
               <EmptyLedger
                 title="Chưa có sổ nào"
                 body="Tạo sổ đầu tiên ở trên để bắt đầu ghi lễ cho nhà mình."
               />
             </div>
           ) : (
-            <ul className="mt-2 divide-y divide-line rounded-xl border border-line bg-card">
+            <ul className="mt-2 divide-y divide-line rounded-[7px] border border-line bg-card">
               {shownBooks.map((b) => (
                 <li key={b.id}>
                   <button
@@ -247,38 +260,13 @@ export function HomeView({
           )}
         </section>
 
-        <SeasonStrip />
+        {/* F13 (Panel R1): BỎ pill «Còn … ngày tới Tết» — chi tiết lạc
+            hệ, vô cớ trong app sổ tiền, lại bị cắt mép ở đáy trang. */}
       </div>
 
       <div className="mx-auto w-full max-w-2xl px-4 pb-8 sm:px-6">
         <InfoSections />
       </div>
     </div>
-  );
-}
-
-/** Tìm Tết Nguyên đán kế tiếp bằng lịch âm Việt (lib/lunar) — quét tối đa 400 ngày. */
-function nextTet(from: Date): { date: Date; days: number } | null {
-  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-  for (let i = 0; i < 400; i += 1) {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    const lunar = solarToLunar(d.getDate(), d.getMonth() + 1, d.getFullYear());
-    if (lunar.day === 1 && lunar.month === 1) return { date: d, days: i };
-  }
-  return null;
-}
-
-/** Dải mùa lễ 1 hàng: đếm ngày tới Tết theo âm lịch thật. */
-function SeasonStrip() {
-  const tet = nextTet(new Date());
-  if (!tet) return null;
-  const fmt = `${tet.date.getDate()}/${tet.date.getMonth() + 1}`;
-  return (
-    <p className="mt-6 flex min-h-10 items-center gap-2 rounded-xl border border-line bg-card px-3.5 text-sm text-muted">
-      <span aria-hidden className="inline-block size-2.5 shrink-0 rounded-sm bg-gold" />
-      Còn <span className="font-mono font-semibold text-ink">{tet.days} ngày</span> tới Tết Nguyên
-      đán ({fmt})
-    </p>
   );
 }

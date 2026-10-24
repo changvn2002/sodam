@@ -138,33 +138,38 @@ export const GROUP_STYLE: Record<
   LexiconGroup,
   { selectedChip: string; softBg: string; accentText: string; dot: string }
 > = {
+  // B′ «Trang Sổ Kẻ»: phân biệt hỷ/tang bằng CÓ/KHÔNG accent + giọng chữ —
+  // KHÔNG màu thứ hai. Chip đang chọn ở MỌI nhóm = mực đen (nút chính = mực);
+  // accent #0969DA (indigo-700 sau remap) chỉ sống ở dot/kicker nhóm HỶ và
+  // vai link/focus/chọn. Tang (solemn) + giỗ (memorial): 0 accent tuyệt đối —
+  // dot, chữ nhấn đều xám mực trung tính; softBg = trắng (paper = #FFFFFF).
   celebratory: {
-    selectedChip: 'border-indigo-700 bg-indigo-700 text-white',
-    softBg: 'bg-indigo-50',
+    selectedChip: 'border-ink bg-ink text-white',
+    softBg: 'bg-card',
     accentText: 'text-indigo-700',
     dot: 'bg-indigo-700',
   },
   solemn: {
-    selectedChip: 'border-solemn-700 bg-solemn-700 text-white',
-    softBg: 'bg-solemn-soft',
+    selectedChip: 'border-ink bg-ink text-white',
+    softBg: 'bg-card',
     accentText: 'text-solemn-700',
     dot: 'bg-solemn-700',
   },
   memorial: {
-    selectedChip: 'border-memorial-700 bg-memorial-700 text-white',
-    softBg: 'bg-memorial-soft',
+    selectedChip: 'border-ink bg-ink text-white',
+    softBg: 'bg-card',
     accentText: 'text-memorial-700',
     dot: 'bg-memorial-700',
   },
   longevity: {
-    selectedChip: 'border-gold-ink bg-gold-ink text-white',
-    softBg: 'bg-gold-soft',
+    selectedChip: 'border-ink bg-ink text-white',
+    softBg: 'bg-card',
     accentText: 'text-gold-ink',
     dot: 'bg-gold-ink',
   },
   neutral: {
-    selectedChip: 'border-muted bg-muted text-white',
-    softBg: 'bg-indigo-50',
+    selectedChip: 'border-ink bg-ink text-white',
+    softBg: 'bg-card',
     accentText: 'text-muted',
     dot: 'bg-muted',
   },

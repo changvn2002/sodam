@@ -109,33 +109,80 @@ export function EventFace({
           softBg celebratory = indigo-50. Dùng token ấm CÓ SẴN trong DESIGN.md
           (--cream #F7F3E8, giấy ấm) cho riêng băng này — không chế hex mới,
           không đổi palette; GROUP_STYLE trong lexicon.ts giữ nguyên. */}
-      <div className={cn('px-4 py-3 lg:px-5', group === 'celebratory' ? 'bg-cream' : style.softBg)}>
-        <h2
+      <div className="border-b border-line bg-card px-4 py-3 lg:px-5">
+        {/* B′ mục 7: phân biệt hỷ/tang bằng CÓ/KHÔNG điểm nhấn + giọng chữ.
+            HỶ: kicker «ĐÁM HỶ» mang điểm chạm ấm trầm DUY NHẤT của hệ
+            (--hy-ink, ghế 5 kê đơn + parent chuẩn y: hỷ/tang hết cùng gam
+            lạnh khi liếc nhìn; đo 6,15:1 trên trắng). TANG/GIỖ: kicker
+            xám mực, 0 accent tuyệt đối trên toàn băng này; màu ấm của hỷ
+            tuyệt đối không xuất hiện ở tang/giỗ hay chrome chung. */}
+        <p
           className={cn(
-            'flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] font-semibold',
-            style.accentText,
+            'mb-1 font-mono text-[10.5px] font-semibold tracking-[0.18em] uppercase',
+            group === 'celebratory' ? 'text-hy-ink' : 'text-muted',
           )}
         >
-          <KindIcon kind={event.kind} className="size-5 shrink-0" />
+          {group === 'celebratory'
+            ? 'Đám hỷ'
+            : group === 'solemn'
+              ? 'Đám tang'
+              : group === 'memorial'
+                ? 'Đám giỗ'
+                : group === 'longevity'
+                  ? 'Mừng thọ'
+                  : 'Đám'}
+        </p>
+        {/* W3-3 (Recheck R2, ghế 1 + ghế 4 M-2): cụm meta KHÔNG để dòng
+            hai bắt đầu bằng «·» — ngày + viên âm lịch là MỘT khối không
+            tách (whitespace-nowrap, không dấu «·» tiền tố); khi cụm wrap
+            ở 390, dòng hai bắt đầu bằng chính ngày tháng. */}
+        <h2 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[15px] font-semibold text-ink">
+          <span className={cn('shrink-0', style.accentText)}>
+            <KindIcon kind={event.kind} className="size-5" />
+          </span>
           <span>
             {kindLabel(event.kind)} · {isHosted ? 'Nhận lễ' : 'Đi đám'} ·{' '}
             {detail?.entryCount ?? event.entryCount ?? 0} {lex.personLabel.toLowerCase()}
           </span>
-          {dates ? <span className="font-normal">· {dates.solar}</span> : null}
-          {dates?.lunar ? (
-            <span className="inline-flex items-center rounded-full bg-gold-soft px-2.5 py-0.5 text-xs font-semibold text-gold-ink">
-              {dates.lunar}
+          {dates ? (
+            <span className="inline-flex items-center gap-2 whitespace-nowrap">
+              <span className="font-normal">{dates.solar}</span>
+              {dates.lunar ? (
+                <span className="inline-flex items-center rounded-full bg-gold-soft px-2.5 py-0.5 text-xs font-semibold text-gold-ink">
+                  {dates.lunar}
+                </span>
+              ) : null}
             </span>
           ) : null}
         </h2>
-        <p className="mt-1 truncate text-lg font-semibold text-ink">{event.title}</p>
+        <p className="mt-1 text-lg leading-snug font-semibold [overflow-wrap:anywhere] text-ink">
+          {event.title}
+        </p>
+        {/* W3-9 (Recheck R2, ghế 5 + phân xử coordinator): hỷ ấm bằng
+            GIỌNG CHỮ người nhà, không thêm màu — một câu mừng ở đầu mặt
+            chi tiết đám cưới/hỷ, đúng chỗ giỗ có câu «nhớ ơn». */}
+        {group === 'celebratory' ? (
+          <p className="mt-1 text-sm leading-relaxed text-muted">
+            {event.kind === 'CUOI' || event.kind === 'DAM_HOI'
+              ? 'Ngày vui của hai cháu — mở trang này ra là thấy bà con quây quần tới mừng, tình nghĩa nhà mình còn đi lại mãi về sau.'
+              : 'Ngày vui của nhà mình — bà con tới chung vui, nhà mình ghi lại từng tấm lòng để tình nghĩa còn qua lại lâu dài.'}
+          </p>
+        ) : null}
+        {/* F3 (Panel R1, ghế 5): đám GIỖ có giọng «nhớ ơn» riêng — giỗ
+            là ngày nhớ ơn người đã khuất, không đứng ngang một khoản
+            chờ thanh toán. */}
+        {group === 'memorial' ? (
+          <p className="mt-1 text-sm leading-relaxed text-muted">
+            Ngày giỗ để nhớ ơn người đã khuất — nhà mình sum họp, tưởng nhớ.
+          </p>
+        ) : null}
       </div>
 
-      <div className="flex divide-x divide-line border-b border-line bg-card">
+      <div className="flex shrink-0 divide-x divide-line border-b border-line bg-card">
         {totalCells.map((cell) => (
           <div key={cell.label} className="min-w-0 flex-1 px-4 py-2.5 lg:px-5">
             <p className="truncate text-xs text-muted">{cell.label}</p>
-            <p className="mt-0.5 truncate font-mono text-[15px] font-semibold tabular-nums">
+            <p className="mt-0.5 font-mono text-[15px] font-semibold whitespace-nowrap tabular-nums">
               {money(cell.value)}
             </p>
           </div>
@@ -144,7 +191,7 @@ export function EventFace({
       {ghosts.length > 0 ? (
         <p
           role="status"
-          className="border-b border-line bg-indigo-50 px-4 py-2 text-sm text-indigo-700 lg:px-5"
+          className="border-b border-line bg-indigo-50 px-4 py-2 text-sm text-ink lg:px-5"
         >
           Chưa gồm {ghosts.length} khoản đang chờ gửi.
         </p>
@@ -157,7 +204,13 @@ export function EventFace({
         >
           <span>{lex.personLabel}</span>
           <span className="text-right">Số tiền</span>
-          <span className="hidden sm:block">Trả lễ</span>
+          {/* F3: cột «Trả lễ» KHÔNG áp lên người phúng/người dự giỗ —
+              bề mặt tang/giỗ không có cột khung nợ. */}
+          {solemnLike ? (
+            <span className="hidden sm:block" />
+          ) : (
+            <span className="hidden sm:block">Trả lễ</span>
+          )}
         </div>
 
         {!detail ? (
@@ -176,26 +229,31 @@ export function EventFace({
             />
           </div>
         ) : (
-          <ul className="min-h-0 flex-1 divide-y divide-line overflow-y-auto">
+          <ul className="flex min-h-0 flex-1 flex-col divide-y divide-line overflow-y-auto">
             {shownGhosts.map((g, i) => (
-              <li key={`ghost-${i}`} className="flex min-h-[52px] items-center gap-3 px-3.5 py-2.5">
+              <li
+                key={`ghost-${i}`}
+                className="flex min-h-[52px] flex-wrap items-center gap-x-3 gap-y-1 px-3.5 py-2.5"
+              >
                 {/* F-r3-1: ghost offline KHÔNG có personId trong kiểu dữ liệu
                     (GhostEntry chỉ có tên) — seed theo id là không thể ở đây;
                     đây là giới hạn dữ kiện của hàng chờ, không phải lỗi render.
                     Mọi hàng CÓ personId đều bắt buộc seed={personId}. */}
                 <PersonAvatar name={g.personName} size="md" />
-                <span className="min-w-0 flex-1">
+                <span className="min-w-0 flex-1 basis-28">
                   <span className="block text-[15px] leading-snug font-medium [overflow-wrap:anywhere] text-ink">
                     {g.personName}
                   </span>
-                  <span className="mt-0.5 block truncate text-xs text-muted">
+                  <span className="mt-0.5 block text-xs text-muted">
                     {sourceLabel(g.source)} · đang chờ gửi
                   </span>
                 </span>
-                <span className="shrink-0 font-mono text-[15px] font-semibold tabular-nums text-ink">
-                  {money(g.amountVnd)}
+                <span className="ml-auto flex shrink-0 items-center gap-3">
+                  <span className="font-mono text-[15px] font-semibold tabular-nums text-ink">
+                    {money(g.amountVnd)}
+                  </span>
+                  <StatusPill status="PENDING" />
                 </span>
-                <StatusPill status="PENDING" />
               </li>
             ))}
             {shownEntries.map((e) => (
@@ -204,34 +262,50 @@ export function EventFace({
                   type="button"
                   onClick={() => setExpandedId((cur) => (cur === e.id ? null : e.id))}
                   aria-expanded={expandedId === e.id}
-                  className="flex min-h-[52px] w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
+                  className="flex min-h-[52px] w-full flex-wrap items-center gap-x-3 gap-y-1 px-3.5 py-2.5 text-left transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
                 >
                   <PersonAvatar name={e.personName} seed={e.personId ?? undefined} size="md" />
-                  <span className="min-w-0 flex-1">
+                  <span className="min-w-0 flex-1 basis-28">
                     {/* B4/D-4: tên người viếng wrap, không ellipsis nhường tiền/chip. */}
                     <span className="block text-[15px] leading-snug font-medium [overflow-wrap:anywhere] text-ink">
                       {e.personName}
                     </span>
-                    <span className="mt-0.5 block truncate text-xs text-muted">
-                      {sourceLabel(e.source)} · {new Date(e.createdAt).toLocaleDateString('vi-VN')}
+                    {/* W3-3 (ghế 1 + ghế 4 M-2): ngày ghi hiện TRỌN bất
+                        kể độ dài số tiền — dòng meta KHÔNG truncate nữa;
+                        ngày là một khối whitespace-nowrap (dấu «·» gắn
+                        cuối phần nguồn ghi), và cụm tiền + trạng thái ở
+                        khổ hẹp tự xuống hàng dưới (flex-wrap của nút)
+                        thay vì ăn cụt ngày. */}
+                    <span className="mt-0.5 flex flex-wrap items-baseline gap-x-1 text-xs text-muted">
+                      <span>{sourceLabel(e.source)} ·</span>
+                      <span className="whitespace-nowrap">
+                        {new Date(e.createdAt).toLocaleDateString('vi-VN')}
+                      </span>
                     </span>
                   </span>
-                  <span className="shrink-0 font-mono text-[15px] font-semibold tabular-nums text-ink">
-                    {money(e.amountVnd)}
-                  </span>
-                  {isHosted && e.returnItem ? (
-                    e.returnItem.status === 'DONE' ? (
-                      (e.returnItem.overGivenVnd ?? 0) > 0 ? (
-                        <StatusPill status="OVER" />
+                  <span className="ml-auto flex shrink-0 items-center gap-3">
+                    <span className="font-mono text-[15px] font-semibold tabular-nums text-ink">
+                      {money(e.amountVnd)}
+                    </span>
+                    {/* F3: badge «Chờ trả / Đã trả / Trả dư» KHÔNG đóng lên
+                        người phúng viếng / khách giỗ trên mặt đám tang/giỗ —
+                        nghĩa vụ vẫn xem và xử lý được ở mặt Trả lễ bằng
+                        giọng «đi lại». Ở đám hỷ, badge giữ nguyên (kèm chấm
+                        accent cho «Chờ trả» theo F9). */}
+                    {isHosted && e.returnItem && !solemnLike ? (
+                      e.returnItem.status === 'DONE' ? (
+                        (e.returnItem.overGivenVnd ?? 0) > 0 ? (
+                          <StatusPill status="OVER" />
+                        ) : (
+                          <StatusPill status="DONE" />
+                        )
+                      ) : e.returnItem.status === 'SKIPPED' ? (
+                        <StatusPill status="SKIPPED" />
                       ) : (
-                        <StatusPill status="DONE" />
+                        <StatusPill status="OPEN" accentDot={group === 'celebratory'} />
                       )
-                    ) : e.returnItem.status === 'SKIPPED' ? (
-                      <StatusPill status="SKIPPED" />
-                    ) : (
-                      <StatusPill status="OPEN" />
-                    )
-                  ) : null}
+                    ) : null}
+                  </span>
                 </button>
                 {expandedId === e.id ? (
                   <EntryExpand
@@ -255,6 +329,30 @@ export function EventFace({
               <li className="px-4 py-4 text-sm text-muted">
                 Không thấy khoản nào khớp với từ tìm.
               </li>
+            ) : null}
+            {/* F10 (Panel R1, ghế 3): trang sổ phải có KẾT — kẻ đôi
+                khép danh sách ngay dưới khoản cuối, trang không còn
+                «cuộn dở» vào khoảng trắng. */}
+            {shownEntries.length + shownGhosts.length > 0 ? (
+              <li className="double-rule-t px-4 py-2 text-center text-xs font-medium text-muted">
+                Hết danh sách — {shownEntries.length + shownGhosts.length}{' '}
+                {lex.personLabel.toLowerCase()} đã ghi
+              </li>
+            ) : null}
+            {/* W3-10/L-5 (ghế 4, «chỉ xử nếu tự nhiên»): đáy trang sổ
+                không còn khoảng trắng chết — sau kẻ đôi khép danh sách,
+                trang sổ kẻ TIẾP các dòng kẻ trống tới chân trang như
+                một trang sổ giấy còn chỗ ghi. Chỉ là nền kẻ mờ
+                (aria-hidden, không nội dung, không tương tác). */}
+            {shownEntries.length + shownGhosts.length > 0 ? (
+              <li
+                aria-hidden
+                className="min-h-16 flex-1"
+                style={{
+                  backgroundImage:
+                    'repeating-linear-gradient(to bottom, transparent 0, transparent 43px, #D8DEE4 43px, #D8DEE4 44px)',
+                }}
+              />
             ) : null}
           </ul>
         )}
@@ -343,7 +441,7 @@ function EntryExpand({
       {!online ? (
         <p
           role="status"
-          className="mb-3 rounded-[10px] bg-indigo-50 px-3 py-2.5 text-sm font-medium text-indigo-700"
+          className="mb-3 rounded-[7px] bg-indigo-50 px-3 py-2.5 text-sm font-medium text-ink"
         >
           Đang offline — sửa và xoá cần có mạng. Ghi khoản mới vẫn được, sẽ vào hàng chờ.
         </p>
@@ -351,35 +449,46 @@ function EntryExpand({
 
       {event.role === 'HOSTED' && ret ? (
         <div className="mb-4">
-          <p className="mb-2 text-sm font-medium">Trả lễ</p>
+          {/* F3: trong bề mặt tang/giỗ, nghĩa vụ gọi là «đi lại» — không
+              khung nợ «trả lễ» (lexicon của nhóm đã khóa paidLabel =
+              «đã đi lại»; fadeOnly ở đây đúng bằng solemnLike). */}
+          <p className="mb-2 text-sm font-medium">{fadeOnly ? 'Đi lại' : 'Trả lễ'}</p>
           {ret.status === 'OPEN' ? (
             <>
               <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
-                <Field label="Số tiền trả lễ">
+                <Field label={fadeOnly ? 'Số tiền đi lại' : 'Số tiền trả lễ'}>
                   <Input
                     inputMode="numeric"
                     value={formatAmountInput(pay)}
                     onChange={(e) => setPayTouched(e.target.value.replace(/\D/g, ''))}
-                    aria-label={`Số tiền trả lễ cho ${entry.personName}`}
+                    aria-label={`${fadeOnly ? 'Số tiền đi lại' : 'Số tiền trả lễ'} cho ${entry.personName}`}
                     disabled={!online}
                   />
                 </Field>
                 <Btn
                   disabled={payNum <= 0 || busy || !online}
                   onClick={() =>
-                    void run(async () => {
-                      await api.markReturn(bookId, ret.id, {
-                        status: 'DONE',
-                        amountVnd: payNum,
-                      });
-                      onToast(`Đã đánh dấu đã trả cho ${entry.personName}.`, {
-                        label: 'Hoàn tác',
-                        run: () => undoReturn(ret.id),
-                      });
-                    }, 'Chưa ghi được trả lễ')
+                    void run(
+                      async () => {
+                        await api.markReturn(bookId, ret.id, {
+                          status: 'DONE',
+                          amountVnd: payNum,
+                        });
+                        onToast(
+                          fadeOnly
+                            ? `Đã ghi đã đi lại cho ${entry.personName}.`
+                            : `Đã đánh dấu đã trả cho ${entry.personName}.`,
+                          {
+                            label: 'Hoàn tác',
+                            run: () => undoReturn(ret.id),
+                          },
+                        );
+                      },
+                      fadeOnly ? 'Chưa ghi được đi lại' : 'Chưa ghi được trả lễ',
+                    )
                   }
                 >
-                  Xác nhận đã trả
+                  {fadeOnly ? 'Xác nhận đã đi lại' : 'Xác nhận đã trả'}
                 </Btn>
               </div>
               <div className="mt-2">
@@ -387,7 +496,13 @@ function EntryExpand({
               </div>
               {payNum > 0 ? (
                 <p className="mt-2 text-sm text-muted" aria-live="polite">
-                  {returnConsequence(payNum, received, entry.personName)}
+                  {fadeOnly
+                    ? payNum < received
+                      ? `Đi lại ${money(payNum)} trong ${money(received)} đã nhận — phần còn lại ${money(received - payNum)} vẫn ở khoản chờ đi lại.`
+                      : payNum > received
+                        ? `Đi lại ${money(payNum)}, nhiều hơn ${money(received)} đã nhận — phần hơn ${money(payNum - received)} được ghi riêng để nhà mình nhớ.`
+                        : `Đi lại ${money(payNum)} — sổ sẽ ghi nhà mình đã đi lại đủ cho ${entry.personName}.`
+                    : returnConsequence(payNum, received, entry.personName)}
                 </p>
               ) : null}
               <div className="mt-2">
@@ -397,21 +512,26 @@ function EntryExpand({
                   onClick={() =>
                     void run(async () => {
                       await api.markReturn(bookId, ret.id, { status: 'SKIPPED' });
-                      onToast(`Đã bỏ qua khoản trả lễ cho ${entry.personName}.`, {
-                        label: 'Hoàn tác',
-                        run: () => undoReturn(ret.id),
-                      });
+                      onToast(
+                        fadeOnly
+                          ? `Đã bỏ qua khoản đi lại cho ${entry.personName}.`
+                          : `Đã bỏ qua khoản trả lễ cho ${entry.personName}.`,
+                        {
+                          label: 'Hoàn tác',
+                          run: () => undoReturn(ret.id),
+                        },
+                      );
                     }, 'Chưa bỏ qua được')
                   }
                 >
-                  Bỏ qua khoản trả lễ này
+                  {fadeOnly ? 'Bỏ qua khoản đi lại này' : 'Bỏ qua khoản trả lễ này'}
                 </Btn>
               </div>
             </>
           ) : ret.status === 'DONE' ? (
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm text-muted">
-                Đã trả{' '}
+                {fadeOnly ? 'Đã đi lại' : 'Đã trả'}{' '}
                 <span className="font-mono font-semibold text-ink">
                   {money(ret.returnedAmountVnd ?? received)}
                 </span>
@@ -440,7 +560,9 @@ function EntryExpand({
             </div>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm text-muted">Đã bỏ qua trả lễ cho khoản này.</p>
+              <p className="text-sm text-muted">
+                {fadeOnly ? 'Đã bỏ qua đi lại cho khoản này.' : 'Đã bỏ qua trả lễ cho khoản này.'}
+              </p>
               <Btn
                 variant="secondary"
                 disabled={busy || !online}
@@ -551,7 +673,10 @@ function EntryExpand({
         >
           <p id={deleteDescId} className="text-sm">
             Xoá khoản <span className="font-mono font-semibold">{money(entry.amountVnd)}</span> của{' '}
-            {entry.personName}? Khoản trả lễ gắn với khoản này cũng bị huỷ.
+            {entry.personName}?{' '}
+            {fadeOnly
+              ? 'Khoản đi lại gắn với khoản này cũng bị huỷ.'
+              : 'Khoản trả lễ gắn với khoản này cũng bị huỷ.'}
           </p>
           <div className="mt-2.5 flex gap-2">
             <Btn

@@ -28,14 +28,20 @@ export const formatAmountInput = (raw: string) => {
 };
 
 export function QuickAmounts({ onPick }: { onPick: (value: number) => void }) {
+  // F12 (Panel R1): chọn nhanh KHÔNG còn là hàng pill — là HÀNG CHỌN
+  // ngăn bằng kẻ như các dòng sổ: số trần trên đường kẻ, chạm là chọn.
   return (
-    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Chọn nhanh số tiền">
+    <div
+      className="flex flex-wrap divide-x divide-line border-y border-line"
+      role="group"
+      aria-label="Chọn nhanh số tiền"
+    >
       {QUICK_AMOUNTS.map((v) => (
         <button
           key={v}
           type="button"
           onClick={() => onPick(v)}
-          className="inline-flex min-h-11 items-center rounded-full border border-line-strong bg-card px-3 font-mono text-[13px] font-medium tabular-nums text-ink transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          className="inline-flex min-h-11 flex-1 items-center justify-center px-2 font-mono text-[13px] font-medium whitespace-nowrap tabular-nums text-ink transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
         >
           {money(v)}
         </button>
@@ -88,9 +94,11 @@ export type PushToast = (
 ) => void;
 
 export const RELATION_LABELS: Record<SodamRelationType, string> = {
-  SPOUSE: 'Vợ/Chồng',
-  PARENT: 'Cha/Mẹ',
+  // F4 (Panel R1, ghế 5): thôi gộp bằng gạch chéo kiểu biểu mẫu dữ liệu
+  // («Cha/Mẹ», «Anh/Chị/Em») — viết như tiếng người nhà nói.
+  SPOUSE: 'Vợ chồng',
+  PARENT: 'Cha mẹ',
   CHILD: 'Con',
-  SIBLING: 'Anh/Chị/Em',
+  SIBLING: 'Anh chị em',
   OTHER: 'Họ hàng',
 };

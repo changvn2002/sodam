@@ -67,12 +67,14 @@ export function PeopleFace({
   const shown = (rows ?? []).filter((r) => !q || r.person.displayName.toLowerCase().includes(q));
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 lg:p-5">
+    // F8: đệm đáy lớn ở mobile để dòng cuối không bị thanh hành động
+    // ghim đáy cắt ngang như vòng trước.
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 pb-28 lg:p-5 lg:pb-5">
       <h2 className="sr-only">Người</h2>
       {rows === null ? (
         <p className="text-sm text-muted">Đang tải danh sách người…</p>
       ) : shown.length === 0 ? (
-        <div className="rounded-xl border border-line bg-card">
+        <div className="rounded-[7px] border border-line bg-card">
           <EmptyLedger
             title={q ? 'Không thấy người này' : 'Chưa có ai trong sổ'}
             body={
@@ -90,51 +92,62 @@ export function PeopleFace({
           />
         </div>
       ) : (
-        <ul className="divide-y divide-line overflow-y-auto rounded-xl border border-line bg-card">
+        // F8 (Panel R1): mặt Người về DÒNG KẺ như mọi trang sổ — bỏ thẻ
+        // nổi bo góc; tóm tắt tiền bằng tiếng người nhà trọn câu, không
+        // cộng/trừ kiểu sao kê, không in dòng 0.
+        <ul className="divide-y divide-line overflow-y-auto border-y border-line">
           {shown.map((r) => (
             <li key={r.person.id}>
               <button
                 type="button"
                 onClick={() => setSelected(r)}
                 aria-label={personAccessibleLabel(r, money)}
-                className="flex min-h-[52px] w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
+                className="flex min-h-[52px] w-full items-start gap-3 px-3.5 py-3 text-left transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
               >
                 <PersonAvatar name={r.person.displayName} seed={r.person.id} size="md" />
                 <span className="min-w-0 flex-1">
                   <span className="block text-[15px] leading-snug font-medium [overflow-wrap:anywhere]">
                     {r.person.displayName}
                   </span>
-                  <span className="mt-0.5 block text-xs leading-snug text-muted">
+                  <span className="mt-0.5 block text-xs leading-snug [overflow-wrap:anywhere] text-muted">
                     {r.history.length} khoản qua lại
                     {r.latestEventTitle ? ` · Đám gần nhất: ${r.latestEventTitle}` : ''}
                   </span>
                   {r.returnState !== 'none' ? (
                     <span className="mt-0.5 block text-xs leading-snug font-medium text-muted">
-                      Trả lễ: {returnStateLabel(r.returnState)}
-                      {r.returnedPaid > 0 ? ` · đã trả ${money(r.returnedPaid)}` : ''}
+                      {returnStateLabel(r.returnState)}
                       {r.pendingReturn > 0 ? ` · còn chờ ${money(r.pendingReturn)}` : ''}
                     </span>
                   ) : null}
-                </span>
-                <span className="shrink-0 text-right">
-                  <span className="block text-[13px] whitespace-nowrap">
-                    <span className="text-xs text-muted">Nhận </span>
-                    <span className="font-mono font-medium tabular-nums">+{money(r.received)}</span>
-                  </span>
-                  <span className="block text-[13px] whitespace-nowrap text-ink">
-                    <span className="text-xs text-muted">Đi đám </span>
-                    <span className="font-mono font-medium tabular-nums">
-                      −{money(r.attendedGiven)}
-                    </span>
-                  </span>
-                  {r.returnedPaid > 0 ? (
-                    <span className="block text-[13px] whitespace-nowrap text-ink">
-                      <span className="text-xs text-muted">Trả lễ </span>
-                      <span className="font-mono font-medium tabular-nums">
-                        −{money(r.returnedPaid)}
+                  <span className="mt-1 block space-y-0.5 text-[13px] leading-snug text-ink">
+                    {r.received > 0 ? (
+                      <span className="block">
+                        Đã nhận{' '}
+                        <span className="font-mono font-semibold tabular-nums">
+                          {money(r.received)}
+                        </span>
                       </span>
-                    </span>
-                  ) : null}
+                    ) : null}
+                    {r.attendedGiven > 0 ? (
+                      <span className="block">
+                        Đã đi đám{' '}
+                        <span className="font-mono font-semibold tabular-nums">
+                          {money(r.attendedGiven)}
+                        </span>
+                      </span>
+                    ) : null}
+                    {r.returnedPaid > 0 ? (
+                      <span className="block">
+                        Đã trả lễ{' '}
+                        <span className="font-mono font-semibold tabular-nums">
+                          {money(r.returnedPaid)}
+                        </span>
+                      </span>
+                    ) : null}
+                    {r.received === 0 && r.attendedGiven === 0 && r.returnedPaid === 0 ? (
+                      <span className="block text-muted">Chưa có khoản qua lại nào</span>
+                    ) : null}
+                  </span>
                 </span>
               </button>
             </li>
@@ -176,9 +189,7 @@ export function PeopleFace({
                 </div>
               ) : null}
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 border-t border-line pt-1.5">
-                <dt className="font-medium text-ink">
-                  Chênh sau trả lễ và đi đám (nhận − đi đám − đã trả lễ)
-                </dt>
+                <dt className="font-medium text-ink">Còn lại sau khi đã đi đám và trả lễ</dt>
                 <dd className="font-mono font-semibold text-ink">{money(selected.balance)}</dd>
               </div>
               <p className="pt-1 text-sm text-muted">
@@ -189,14 +200,14 @@ export function PeopleFace({
               </p>
             </dl>
             {selected.returnItems.length > 0 ? (
-              <ul className="mt-3 divide-y divide-line rounded-xl border border-line">
+              <ul className="mt-3 divide-y divide-line border-y border-line">
                 {selected.returnItems.map((r) => (
                   <li
                     key={r.id}
                     className="flex min-h-12 items-center justify-between gap-3 px-3.5 py-2 text-sm"
                   >
                     <span className="min-w-0">
-                      <span className="block truncate font-medium">
+                      <span className="block font-medium [overflow-wrap:anywhere]">
                         {r.fromEventTitle ?? 'Khoản trả lễ'}
                       </span>
                       <span className="block text-xs text-muted">
@@ -224,14 +235,16 @@ export function PeopleFace({
             {selected.history.length === 0 ? (
               <p className="mt-3 text-sm text-muted">Chưa có lịch sử qua lại.</p>
             ) : (
-              <ul className="mt-3 max-h-[46dvh] divide-y divide-line overflow-y-auto rounded-xl border border-line">
+              <ul className="mt-3 max-h-[46dvh] divide-y divide-line overflow-y-auto border-y border-line">
                 {selected.history.map(({ entry, eventTitle, role }) => (
                   <li
                     key={entry.id}
                     className="flex min-h-12 items-center justify-between gap-3 px-3.5 py-2 text-sm"
                   >
                     <span className="min-w-0">
-                      <span className="block truncate font-medium">{eventTitle}</span>
+                      <span className="block font-medium [overflow-wrap:anywhere]">
+                        {eventTitle}
+                      </span>
                       <span className="block text-xs text-muted">
                         {role === 'HOSTED' ? 'Nhận lễ' : 'Đi đám'} · {sourceLabel(entry.source)} ·{' '}
                         {new Date(entry.createdAt).toLocaleDateString('vi-VN')}

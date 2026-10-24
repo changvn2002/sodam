@@ -94,16 +94,17 @@ const KIND_PATHS: Partial<Record<SodamEventKind, ReactNode>> = {
       <path d="M12.9 4.9c.4-1.7 1.8-2.8 3.8-3 .1 2-1.1 3.3-3 3.6" />
     </>
   ),
-  // Thôi nôi — lục lạc trẻ nhỏ: đầu tròn có vòng trong + bi, tay cầm xiên
-  // có hai ngấn nắm. B8: bản cũ (tròn + que thẳng + 2 chấm) mơ hồ; bản này
-  // thêm vòng trong/bi/tay cầm xiên có ngấn để đọc ra lục lạc ngay ở cỡ chip.
+  // Thôi nôi — lục lạc trẻ nhỏ. W3-10/L-6 (Recheck R2, ghế 4): bản cũ
+  // (vòng tròn + tay cầm XIÊN chéo xuống phải) đọc thành KÍNH LÚP ở cỡ
+  // chip. Vẽ lại: đầu lục lạc tròn chứa hai hạt lắc, tay cầm DỌC thẳng
+  // xuống từ đáy đầu (hai thành + hai ngấn ngang + chân cầm) — không
+  // còn đường chéo nào để mắt đọc thành tay kính lúp.
   THOI_NOI: (
     <>
-      <circle cx="10" cy="10" r="6" />
-      <circle cx="10" cy="10" r="2.4" />
-      <circle cx="7.6" cy="6.8" r="0.4" fill="currentColor" />
-      <path d="M14.3 14.3 20.2 20.2" />
-      <path d="M15.9 18.1l2.3-2.3M18 20.2l2.3-2.3" />
+      <circle cx="12" cy="9" r="5.5" />
+      <circle cx="9.7" cy="7.6" r="1.05" />
+      <circle cx="14.3" cy="7.6" r="1.05" />
+      <path d="M10.2 13.6v6.8M13.8 13.6v6.8M10.2 20.4h3.6M10.2 17h3.6" />
     </>
   ),
   // Đầy tháng — trăng lưỡi liềm + sao.

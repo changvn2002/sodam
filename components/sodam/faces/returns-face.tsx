@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SodamApi } from '../api';
 import type { SodamEvent, SodamReturnItem } from '../api/types';
+import { groupOfKind } from '../lib/lexicon';
 import { nextReturnPay } from '../lib/return-pay';
-import { Btn, EmptyLedger, Field, Input, SegmentedTabs, StatusPill } from '../shell';
+import { Btn, EmptyLedger, Field, Input, LedgerTabs, StatusPill } from '../shell';
 import { LedgerRow } from '../ui/ledger-row';
 import { Undo2 } from 'lucide-react';
 import {
@@ -83,7 +84,10 @@ export function ReturnsFace({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 lg:p-5">
       <h2 className="sr-only">Trả lễ</h2>
-      <div className="flex divide-x divide-line overflow-hidden rounded-xl border border-line bg-card">
+      {/* shrink-0: khối tổng mini là chrome cố định của mặt — không
+          được co chiều cao khi danh sách dài (flex column từng co khối
+          này xuống 36px và cắt chân số ở pack round-2 lượt đầu). */}
+      <div className="flex shrink-0 divide-x divide-line overflow-hidden rounded-[7px] border border-line bg-card">
         {[
           { label: 'Chờ trả', value: open.reduce((s, r) => s + receivedOf(r), 0) },
           {
@@ -94,7 +98,7 @@ export function ReturnsFace({
         ].map((cell) => (
           <div key={cell.label} className="min-w-0 flex-1 px-3.5 py-3">
             <p className="text-xs text-muted">{cell.label}</p>
-            <p className="mt-0.5 truncate font-mono text-[15px] font-semibold tabular-nums">
+            <p className="mt-0.5 font-mono text-[15px] font-semibold whitespace-nowrap tabular-nums">
               {money(cell.value)}
             </p>
           </div>
@@ -104,7 +108,7 @@ export function ReturnsFace({
       {filterEvent ? (
         <p className="mt-3 flex flex-wrap items-center gap-2 text-sm">
           <span>
-            Đang xem: <span className="font-medium">{filterEvent.title}</span>
+            Đang lọc theo đám: <span className="font-medium">{filterEvent.title}</span>
           </span>
           <Btn variant="ghost" onClick={onClearEventFilter}>
             Bỏ lọc
@@ -112,8 +116,9 @@ export function ReturnsFace({
         </p>
       ) : null}
 
-      <div className="mt-4">
-        <SegmentedTabs
+      <div className="mt-4 shrink-0">
+        {/* W4-2: thanh lọc bỏ dạng pill — chữ trần + gạch mực (LedgerTabs). */}
+        <LedgerTabs
           ariaLabel="Lọc khoản trả lễ"
           value={filter}
           onChange={setFilter}
@@ -127,7 +132,7 @@ export function ReturnsFace({
       </div>
 
       {shown.length === 0 ? (
-        <div className="mt-4 rounded-xl border border-line bg-card">
+        <div className="mt-4 rounded-[7px] border border-line bg-card">
           <EmptyLedger
             title={
               filter === 'OPEN'
@@ -151,9 +156,15 @@ export function ReturnsFace({
           />
         </div>
       ) : (
-        <ul className="mt-4 divide-y divide-line overflow-y-auto rounded-xl border border-line bg-card">
+        <ul className="mt-4 divide-y divide-line overflow-y-auto border-y border-line">
           {shown.map((r) => {
             const isOver = (r.overGivenVnd ?? 0) > 0;
+            // F3: nghĩa vụ TỚI ĐƯỢC ở mặt này với mọi loại đám, nhưng
+            // khoản gốc từ đám tang/giỗ mang lexicon «đi lại» ở nhãn
+            // trạng thái và trong phần mở rộng — không gọi là «trả».
+            const fromEvent = events.find((e) => e.id === r.fromEventId);
+            const fromGroup = fromEvent ? groupOfKind(fromEvent.kind) : 'neutral';
+            const solemnLike = fromGroup === 'solemn' || fromGroup === 'memorial';
             return (
               <li key={r.id}>
                 <LedgerRow
@@ -163,13 +174,17 @@ export function ReturnsFace({
                   meta={r.fromEventTitle ?? undefined}
                   trailing={
                     r.status === 'OPEN' ? (
-                      <StatusPill status="OPEN" />
+                      <StatusPill
+                        status="OPEN"
+                        label={solemnLike ? 'Chưa đi lại' : undefined}
+                        accentDot={!solemnLike && fromGroup === 'celebratory'}
+                      />
                     ) : r.status === 'SKIPPED' ? (
-                      <StatusPill status="SKIPPED" />
+                      <StatusPill status="SKIPPED" label={solemnLike ? 'Đã bỏ qua' : undefined} />
                     ) : isOver ? (
-                      <StatusPill status="OVER" />
+                      <StatusPill status="OVER" label={solemnLike ? 'Đi lại dư' : undefined} />
                     ) : (
-                      <StatusPill status="DONE" />
+                      <StatusPill status="DONE" label={solemnLike ? 'Đã đi lại' : undefined} />
                     )
                   }
                   onClick={() => setExpandedId((cur) => (cur === r.id ? null : r.id))}
@@ -179,6 +194,7 @@ export function ReturnsFace({
                     api={api}
                     bookId={bookId}
                     item={r}
+                    solemnLike={solemnLike}
                     onDone={() => {
                       void reload();
                       onDataChanged();
@@ -200,6 +216,7 @@ function ReturnExpand({
   api,
   bookId,
   item,
+  solemnLike = false,
   onDone,
   onToast,
   onError,
@@ -207,6 +224,9 @@ function ReturnExpand({
   api: SodamApi;
   bookId: string;
   item: SodamReturnItem;
+  /** F3: khoản gốc từ đám tang/giỗ — toàn bộ chữ trong phần mở rộng
+      dùng giọng «đi lại», không dùng «trả». */
+  solemnLike?: boolean;
   onDone: () => void;
   onToast: PushToast;
   onError: (m: string | null) => void;
@@ -255,7 +275,7 @@ function ReturnExpand({
         <p className="text-sm text-muted">
           {item.status === 'DONE' ? (
             <>
-              Đã trả{' '}
+              {solemnLike ? 'Đã đi lại' : 'Đã trả'}{' '}
               <span className="font-mono font-semibold text-ink">
                 {money(item.returnedAmountVnd ?? item.doneAmountVnd ?? received)}
               </span>
@@ -270,6 +290,8 @@ function ReturnExpand({
                 </>
               ) : null}
             </>
+          ) : solemnLike ? (
+            'Đã bỏ qua khoản đi lại này.'
           ) : (
             'Đã bỏ qua khoản trả lễ này.'
           )}
@@ -290,27 +312,33 @@ function ReturnExpand({
   return (
     <div className="animate-row border-t border-line bg-paper px-3.5 py-3.5">
       <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-end">
-        <Field label="Số tiền mình trả">
+        <Field label={solemnLike ? 'Số tiền mình đi lại' : 'Số tiền mình trả'}>
           <Input
             inputMode="numeric"
             value={formatAmountInput(pay)}
             onChange={(e) => setPayTouched(e.target.value.replace(/\D/g, ''))}
-            aria-label={`Số tiền trả lễ cho ${name}`}
+            aria-label={`${solemnLike ? 'Số tiền đi lại' : 'Số tiền trả lễ'} cho ${name}`}
           />
         </Field>
         <Btn
           disabled={payNum <= 0 || busy}
           onClick={() =>
-            void run(async () => {
-              await api.markReturn(bookId, item.id, { status: 'DONE', amountVnd: payNum });
-              onToast(`Đã đánh dấu đã trả cho ${name}.`, {
-                label: 'Hoàn tác',
-                run: undoToOpen,
-              });
-            }, 'Chưa ghi được trả lễ')
+            void run(
+              async () => {
+                await api.markReturn(bookId, item.id, { status: 'DONE', amountVnd: payNum });
+                onToast(
+                  solemnLike ? `Đã ghi đã đi lại cho ${name}.` : `Đã đánh dấu đã trả cho ${name}.`,
+                  {
+                    label: 'Hoàn tác',
+                    run: undoToOpen,
+                  },
+                );
+              },
+              solemnLike ? 'Chưa ghi được đi lại' : 'Chưa ghi được trả lễ',
+            )
           }
         >
-          Xác nhận đã trả
+          {solemnLike ? 'Xác nhận đã đi lại' : 'Xác nhận đã trả'}
         </Btn>
         <Btn
           variant="secondary"
@@ -318,10 +346,15 @@ function ReturnExpand({
           onClick={() =>
             void run(async () => {
               await api.markReturn(bookId, item.id, { status: 'SKIPPED' });
-              onToast(`Đã bỏ qua khoản trả lễ cho ${name}.`, {
-                label: 'Hoàn tác',
-                run: undoToOpen,
-              });
+              onToast(
+                solemnLike
+                  ? `Đã bỏ qua khoản đi lại cho ${name}.`
+                  : `Đã bỏ qua khoản trả lễ cho ${name}.`,
+                {
+                  label: 'Hoàn tác',
+                  run: undoToOpen,
+                },
+              );
             }, 'Chưa bỏ qua được')
           }
         >
@@ -333,12 +366,18 @@ function ReturnExpand({
       </div>
       {payNum > 0 ? (
         <p className="mt-2 text-sm text-muted" aria-live="polite">
-          {returnConsequence(payNum, received, name)}
+          {solemnLike
+            ? payNum < received
+              ? `Đi lại ${money(payNum)} trong ${money(received)} đã nhận — phần còn lại ${money(received - payNum)} vẫn ở khoản chờ đi lại.`
+              : payNum > received
+                ? `Đi lại ${money(payNum)}, nhiều hơn ${money(received)} đã nhận — phần hơn ${money(payNum - received)} được ghi riêng để nhà mình nhớ.`
+                : `Đi lại ${money(payNum)} — sổ sẽ ghi nhà mình đã đi lại đủ cho ${name}.`
+            : returnConsequence(payNum, received, name)}
         </p>
       ) : (
         <p className="mt-2 text-sm text-muted">
-          Họ đã ghi <span className="font-mono font-medium text-ink">{money(received)}</span> — số
-          trả mặc định bằng số đã nhận, sửa được trước khi xác nhận.
+          Họ đã ghi <span className="font-mono font-medium text-ink">{money(received)}</span> — số{' '}
+          {solemnLike ? 'đi lại' : 'trả'} mặc định bằng số đã nhận, sửa được trước khi xác nhận.
         </p>
       )}
     </div>

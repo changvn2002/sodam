@@ -6,7 +6,7 @@ import type { SodamEvent, SodamParseResult, SodamPerson } from '../api/types';
 import { cn } from '@/lib/utils';
 import { kindLabel } from '../lib/event-kinds';
 import { GROUP_STYLE, groupOfKind, lexiconForKind } from '../lib/lexicon';
-import { Btn, Field, Input, SegmentedTabs, Sheet } from '../shell';
+import { Btn, Field, Input, Sheet } from '../shell';
 import { KindIcon } from '../ui/kind-icon';
 import { Mic, Plus } from 'lucide-react';
 import {
@@ -15,7 +15,6 @@ import {
   money,
   QuickAmounts,
   type GhostEntry,
-  type PushToast,
 } from '../app-shared';
 
 /* ------------------------------------------------------------------ */
@@ -32,7 +31,6 @@ export function QuickEntry({
   onEnqueued,
   onClose,
   onSaved,
-  onToast,
   onCreateEvent,
 }: {
   api: SodamApi;
@@ -44,7 +42,8 @@ export function QuickEntry({
   onEnqueued: (ghost: GhostEntry) => void;
   onClose: () => void;
   onSaved: () => void;
-  onToast: PushToast;
+  // F1: QuickEntry KHÔNG bắn toast nữa — xác nhận sau lưu là màn tại
+  // chỗ duy nhất trong chính composer (xem savedInfo).
   onCreateEvent: () => void;
 }) {
   const [event, setEvent] = useState<SodamEvent | null>(initialEvent);
@@ -56,6 +55,16 @@ export function QuickEntry({
   const [amountError, setAmountError] = useState<string | null>(null);
   const [people, setPeople] = useState<SodamPerson[]>([]);
   const [queuedNote, setQueuedNote] = useState(false);
+  // F1 (Panel R1): sau khi lưu, composer chuyển hẳn sang MỘT màn xác
+  // nhận duy nhất (không toast chồng banner, không form trắng + «Sẽ
+  // ghi:» ở thì tương lai đứng cạnh thông báo đã lưu).
+  const [savedInfo, setSavedInfo] = useState<{
+    name: string;
+    amount: number;
+    eventTitle: string;
+    sentence: string;
+    newTotal: number | null;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
@@ -86,7 +95,16 @@ export function QuickEntry({
   const amountNum = Number(amount.replace(/\D/g, '')) || 0;
   const suggestions = useMemo(() => {
     const q = name.trim().toLowerCase();
-    return people.filter((p) => !q || p.displayName.toLowerCase().includes(q)).slice(0, 6);
+    return people
+      .filter((p) => {
+        const dn = p.displayName.trim().toLowerCase();
+        // W3-10/L-2 (ghế 4): bỏ ECHO — người mà tên đã gõ TRỌN trong ô
+        // không hiện lại nguyên văn ngay dưới ô như máy lặp lại; hàng
+        // gợi ý chỉ còn người khác khớp một phần.
+        if (q && dn === q) return false;
+        return !q || dn.includes(q);
+      })
+      .slice(0, 6);
   }, [people, name]);
 
   const speak = (text: string) => {
@@ -197,26 +215,34 @@ export function QuickEntry({
         onSaved();
         return;
       }
+      const savedName = name.trim();
+      const savedAmount = amountNum;
+      const savedSentence = lex.savedToast(savedName);
       await api.createEntry(bookId, event.id, {
-        personName: name.trim(),
-        amountVnd: amountNum,
+        personName: savedName,
+        amountVnd: savedAmount,
         source,
         rawText: source === 'VOICE' ? transcript || undefined : undefined,
       });
-      onToast(lex.savedToast(name.trim()));
+      // F1: KHÔNG toast nữa — xác nhận duy nhất là màn «Đã ghi vào sổ»
+      // bên dưới (câu xác nhận theo giọng đám của lexicon được giữ làm
+      // câu chính của màn đó). Tổng MỚI của đám lấy lại từ máy chủ để
+      // người ghi đối chiếu ngay, như dòng vừa xuống sổ giấy.
+      let newTotal: number | null = null;
+      try {
+        const detail = await api.getEvent(bookId, event.id);
+        newTotal = detail.totalAmountVnd ?? null;
+      } catch {
+        newTotal = null;
+      }
+      setSavedInfo({
+        name: savedName,
+        amount: savedAmount,
+        eventTitle: event.title,
+        sentence: savedSentence,
+        newTotal,
+      });
       onSaved();
-      // B3 (Panel #03 / R3 MINOR, H7): GIỮ composer mở sau khi lưu thành
-      // công — luồng chính của sổ đám là ghi LIÊN TIẾP nhiều khoản tại đám;
-      // đóng sau mỗi khoản bắt người ghi mở lại từ đầu. Reset tên/tiền về
-      // trống (giữ §1.7: ô tiền trống mặc định, không số điền sẵn), focus về
-      // ô tên để ghi khoản tiếp; đóng hẳn bằng nút "Xong" / nút đóng sheet.
-      setName('');
-      setAmount('');
-      setTranscript('');
-      setVoiceNote(null);
-      setNameError(null);
-      setAmountError(null);
-      nameRef.current?.focus();
     } catch (e) {
       setAmountError(friendlyError(e, 'Chưa lưu được khoản — thử lại.'));
     } finally {
@@ -236,6 +262,67 @@ export function QuickEntry({
           <Btn className="w-full" onClick={onClose}>
             Xong
           </Btn>
+        </div>
+      ) : savedInfo ? (
+        /* F1: MÀN XÁC NHẬN DUY NHẤT sau khi lưu — khoản vừa ghi nằm
+           nguyên như một dòng sổ (người · số tiền · đám · tổng mới),
+           không form trống, không «Sẽ ghi:», không toast chồng. Đóng
+           bằng «Xong»; ghi tiếp là hành động phụ rõ ràng. */
+        <div className="space-y-4">
+          <div role="status">
+            <p className="text-[17px] font-bold text-ink">Đã ghi vào sổ</p>
+            <p className="mt-1 text-sm font-medium text-ink">{savedInfo.sentence}</p>
+          </div>
+          <dl className="divide-y divide-line border-y border-line text-sm">
+            <div className="flex items-baseline justify-between gap-4 py-2">
+              <dt className="font-medium text-muted">Người vừa ghi</dt>
+              <dd className="font-semibold text-ink">{savedInfo.name}</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-4 py-2">
+              <dt className="font-medium text-muted">Số tiền</dt>
+              <dd className="font-mono text-[15px] font-bold tabular-nums">
+                {money(savedInfo.amount)}
+              </dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-4 py-2">
+              <dt className="font-medium text-muted">Vào đám</dt>
+              <dd className="text-right font-semibold [overflow-wrap:anywhere] text-ink">
+                {savedInfo.eventTitle}
+              </dd>
+            </div>
+            {savedInfo.newTotal != null ? (
+              <div className="flex items-baseline justify-between gap-4 py-2">
+                <dt className="font-medium text-muted">Tổng mới của đám</dt>
+                <dd className="font-mono text-[15px] font-bold tabular-nums">
+                  {money(savedInfo.newTotal)}
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+          <p className="text-sm text-muted">
+            Khoản này đã nằm trong danh sách của đám — đóng lại là thấy ngay dòng vừa ghi.
+          </p>
+          <div className="flex gap-2">
+            <Btn
+              variant="secondary"
+              className="flex-1"
+              onClick={() => {
+                setSavedInfo(null);
+                setName('');
+                setAmount('');
+                setTranscript('');
+                setVoiceNote(null);
+                setNameError(null);
+                setAmountError(null);
+                nameRef.current?.focus();
+              }}
+            >
+              Ghi khoản tiếp
+            </Btn>
+            <Btn className="flex-1" onClick={onClose}>
+              Xong
+            </Btn>
+          </div>
         </div>
       ) : !event ? (
         <div className="space-y-3">
@@ -279,15 +366,40 @@ export function QuickEntry({
         </div>
       ) : (
         <div className="space-y-4">
-          <SegmentedTabs
-            ariaLabel="Cách ghi khoản"
-            value={mode}
-            onChange={setMode}
-            options={[
+          {/* W3-5 (Recheck R2, ghế 3): toggle «Gõ tay / Giọng nói» bỏ
+              dạng segmented-pill template (khay xám bo tròn + viên trắng
+              nổi bóng) — vẽ lại theo NGÔN NGỮ SỔ như hàng chọn số tiền:
+              hai ô trần ngăn bằng kẻ dọc trên đường kẻ ngang, ô đang
+              chọn = chữ đậm + gạch mực ở chân ô. */}
+          <div
+            role="tablist"
+            aria-label="Cách ghi khoản"
+            className="flex divide-x divide-line border-y border-line"
+          >
+            {[
               { id: 'manual', label: 'Gõ tay' },
               { id: 'voice', label: 'Giọng nói' },
-            ]}
-          />
+            ].map((opt) => {
+              const active = mode === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setMode(opt.id)}
+                  className={cn(
+                    'inline-flex min-h-11 flex-1 items-center justify-center px-3 text-sm whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset',
+                    active
+                      ? 'font-bold text-ink shadow-[inset_0_-2px_0_0_#1F2328]'
+                      : 'font-medium text-muted hover:text-ink',
+                  )}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
 
           {mode === 'voice' ? (
             <div className="space-y-3">
@@ -321,6 +433,8 @@ export function QuickEntry({
             </div>
           ) : null}
 
+          {/* B′ mục 5: form vẽ trong thế giới DÒNG KẺ — trường là một dòng
+              kẻ có nhãn mono phía trên, không hộp bo góc kiểu iOS. */}
           <Field label={lex!.nameFieldLabel} error={nameError}>
             <Input
               ref={nameRef}
@@ -328,16 +442,23 @@ export function QuickEntry({
               onChange={(e) => setName(e.target.value)}
               placeholder="Họ tên"
               autoComplete="off"
+              className="rounded-none border-0 border-b border-line-strong px-0 shadow-none focus:border-indigo-500 focus:ring-0"
             />
           </Field>
+          {/* F12: gợi ý tên cũng về HÀNG KẺ — tên trần ngăn bằng kẻ dọc,
+              không pill. */}
           {suggestions.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Người đã có trong sổ">
+            <div
+              className="flex flex-wrap divide-x divide-line border-y border-line"
+              role="group"
+              aria-label="Người đã có trong sổ"
+            >
               {suggestions.map((p) => (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => setName(p.displayName)}
-                  className="inline-flex min-h-11 items-center rounded-full border border-line-strong bg-card px-3 text-sm transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  className="inline-flex min-h-11 items-center px-3 text-sm font-medium text-ink transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset"
                 >
                   {p.displayName}
                 </button>
@@ -349,14 +470,23 @@ export function QuickEntry({
             <Input
               ref={amountRef}
               inputMode="numeric"
-              value={formatAmountInput(amount)}
+              // F12: ký hiệu ₫ hiện TẠI CHỖ trong ô tiền lớn, kể cả khi
+              // đã có số (trước đây chỉ placeholder mới có ₫).
+              value={amount ? `${formatAmountInput(amount)}₫` : ''}
               onChange={(e) => setAmount(e.target.value.replace(/\D/g, ''))}
-              placeholder="0 ₫"
+              placeholder="0₫"
+              className="rounded-none border-0 border-b-2 border-indigo-500 px-0 font-mono text-[32px] font-semibold shadow-none focus:ring-0"
             />
           </Field>
+          <p className="-mt-2 text-[13px] text-muted">Cứ nhập số, sổ tự thêm dấu chấm và ₫.</p>
           <QuickAmounts onPick={(v) => setAmount(String(v))} />
 
-          <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
+          {/* F1: thanh dưới form chỉ còn MỘT nút lưu duy nhất. «Xong»
+              gây lẫn (tưởng đã lưu) bị bỏ khỏi đây — đóng form chưa lưu
+              bằng nút đóng (×) trên đầu hộp; «Xong» chỉ xuất hiện ở màn
+              xác nhận SAU khi đã lưu. Dòng đọc lại «Sẽ ghi:» ở thì tương
+              lai chỉ sống ở trạng thái CHƯA lưu này. */}
+          <div className="sticky bottom-0 -mx-1 flex items-center justify-between gap-3 border-t border-line bg-card px-1 pt-3 pb-1">
             <p className="min-w-0 text-sm text-muted" aria-live="polite">
               {name.trim() && amountNum > 0 ? (
                 <>
@@ -368,14 +498,9 @@ export function QuickEntry({
                 'Sẽ ghi: …'
               )}
             </p>
-            <span className="flex shrink-0 gap-2">
-              <Btn variant="secondary" onClick={onClose}>
-                Xong
-              </Btn>
-              <Btn disabled={busy} onClick={() => void save()}>
-                {lex!.saveLabel}
-              </Btn>
-            </span>
+            <Btn className="shrink-0" disabled={busy} onClick={() => void save()}>
+              {lex!.saveLabel}
+            </Btn>
           </div>
           {!online ? (
             <p className="text-sm text-muted">

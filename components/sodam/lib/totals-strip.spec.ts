@@ -135,9 +135,9 @@ describe('totals-strip — TC-1 (Panel #04): bỏ phương trình, tách 2 hạn
     ]);
   });
 
-  it('(2) chỉ đi đám → chỉ hạng out-pool 200.000', () => {
+  it('(2) chỉ đi đám → chỉ hạng out-pool 200.000, nhãn «Đi đám» (TC5-4: O = 0)', () => {
     expect(totalsTerms(toTotals(SHAPE2))).toEqual([
-      { key: 'out-pool', label: 'Trả dư + đi đám', valueVnd: 200_000 },
+      { key: 'out-pool', label: 'Đi đám', valueVnd: 200_000 },
     ]);
   });
 
@@ -161,10 +161,10 @@ describe('totals-strip — TC-1 (Panel #04): bỏ phương trình, tách 2 hạn
     expect(totals.pendingReturnVnd).toBe(500_000);
   });
 
-  it('ca R1 của panel → hạng 500.000 + 200.000', () => {
+  it('ca R1 của panel → hạng 500.000 + 200.000 (nhãn hạng 2 = «Trả dư» theo TC5-4 vì A = 0)', () => {
     expect(totalsTerms(toTotals(CASE_R1))).toEqual([
       { key: 'in-pool', label: 'Đã đi trong khoản đã nhận', valueVnd: 500_000 },
-      { key: 'out-pool', label: 'Trả dư + đi đám', valueVnd: 200_000 },
+      { key: 'out-pool', label: 'Trả dư', valueVnd: 200_000 },
     ]);
   });
 

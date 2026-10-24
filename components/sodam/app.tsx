@@ -6,9 +6,9 @@ import type { SodamBook, SodamDashboard, SodamEvent } from './api/types';
 import { knownBookCodes, rememberBook } from './lib/book-store';
 import { totalsTerms } from './lib/totals-strip';
 import { useSodamOffline } from './lib/offline';
-import { lexiconForKind } from './lib/lexicon';
+import { groupOfKind, lexiconForKind } from './lib/lexicon';
 import { startRum } from './lib/rum';
-import { Btn, CommandBar, TotalsStrip, WorkspaceShell } from './shell';
+import { Btn, CommandBar, Sheet, TotalsStrip, WorkspaceShell } from './shell';
 import { OutboxChip } from './ui/offline-ui';
 import { ToastStack, type ToastData } from './ui/toast';
 import { MoreVertical, Plus } from 'lucide-react';
@@ -282,6 +282,13 @@ export function SodamApp() {
 
   const totals = dash?.totals;
   const activeEvent = events.find((e) => e.id === activeEventId) ?? null;
+  const activeEventGroup = activeEvent ? groupOfKind(activeEvent.kind) : null;
+  // F7 (Panel R1): suppression CHỈ trong bề mặt chi tiết của chính đám
+  // tang/giỗ (mặt Đám đang mở đúng đám đó). Ở mọi mặt cấp sổ khác
+  // (Tổng quan / Trả lễ / Người / Cây họ) chrome giữ accent thường dù
+  // đám đang chọn trong ô ghi khoản là đám tang.
+  const suppressAccent =
+    face === 'event' && (activeEventGroup === 'solemn' || activeEventGroup === 'memorial');
   const composerEvent = events.find((e) => e.id === composerEventId) ?? null;
   const showSearch = face === 'event' || face === 'people';
   const searchPlaceholder =
@@ -296,16 +303,25 @@ export function SodamApp() {
       <button
         type="button"
         onClick={() => {
-          setShareOpen((v) => !v);
+          setShareOpen(true);
           setOverflowOpen(false);
         }}
         aria-expanded={shareOpen}
-        className="inline-flex min-h-11 items-center gap-1.5 rounded-[10px] px-2.5 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        className={
+          'inline-flex min-h-11 items-center gap-1.5 rounded-[7px] px-2.5 text-sm font-medium transition-colors hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ' +
+          // F7′ (Recheck R2): «Chia sẻ» là chrome của VIEW đang xem —
+          // ở mặt chi tiết đám tang/giỗ nó về mực trung tính theo
+          // suppression của chính view đó; ở mọi mặt khác giữ accent.
+          (suppressAccent ? 'text-ink' : 'text-indigo-700')
+        }
       >
         Chia sẻ
       </button>
+      {/* F6 (Panel R1): panel chia sẻ là SHEET có scrim đều toàn màn
+          (Sheet lo scrim bg-ink/45 phủ kín) — hết cảnh panel lơ lửng hở
+          mép, nền lòi chữ cụt quanh panel như dropdown cũ. */}
       {shareOpen ? (
-        <span className="absolute top-full right-0 z-30 mt-1 block w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-line bg-card p-3 shadow-[var(--shadow-lift)]">
+        <Sheet open title={`Chia sẻ sổ`} onClose={() => setShareOpen(false)}>
           <SharePanel
             api={api}
             book={activeBook}
@@ -318,7 +334,7 @@ export function SodamApp() {
             onToast={pushToast}
             onError={setError}
           />
-        </span>
+        </Sheet>
       ) : null}
     </span>
   ) : null;
@@ -416,6 +432,7 @@ export function SodamApp() {
         activeEventId={activeEventId}
         face={face}
         returnsBadge={dash?.openReturnCount || undefined}
+        suppressChromeAccent={suppressAccent}
         onSelectBook={(id) => {
           setBookId(id);
           setFace('overview');
@@ -430,8 +447,14 @@ export function SodamApp() {
         onCreateBook={() => setBookId(null)}
         onCreateEvent={() => setCreateEventOpen(true)}
         totalsStrip={
-          totals ? (
+          // F10 (Panel R1): cắt khối tổng toàn sổ khỏi mặt Người và Cây
+          // họ — ở đó nó là nghi lễ lặp, không phục vụ việc đang làm.
+          // Giữ ở Tổng quan / Đám / Trả lễ. F3: ở mặt chi tiết đám
+          // tang/giỗ, ẩn hàng «Cần trả lễ» (hidePending).
+          face === 'people' || face === 'tree' ? null : totals ? (
             <TotalsStrip
+              hidePending={suppressAccent}
+              hideTerms={suppressAccent}
               received={money(totals.receivedGrossVnd ?? totals.receivedVnd)}
               given={money(totals.givenVnd)}
               kept={money(totals.receivedVnd)}
@@ -461,11 +484,6 @@ export function SodamApp() {
         outboxChip={outboxChip}
         shareMenu={shareMenu}
         overflowMenu={overflowMenu}
-        mobileTotal={
-          totals
-            ? { label: 'Còn giữ', value: money(totals.receivedVnd) }
-            : { label: 'Còn giữ', value: '—' }
-        }
         quickBarAction={
           <Btn onClick={() => openComposer()}>
             <Plus className="size-4" aria-hidden /> Ghi khoản
@@ -583,7 +601,6 @@ export function SodamApp() {
           onEnqueued={(g) => setGhosts((prev) => [...prev, g])}
           onClose={() => setComposerOpen(false)}
           onSaved={() => void reloadWorkspace()}
-          onToast={pushToast}
           onCreateEvent={() => {
             setComposerOpen(false);
             setCreateEventOpen(true);

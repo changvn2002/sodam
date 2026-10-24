@@ -17,7 +17,7 @@ import '@fontsource/ibm-plex-mono/500.css';
 import '@fontsource/ibm-plex-mono/600.css';
 
 export const viewport: Viewport = {
-  themeColor: '#161A3D',
+  themeColor: '#1F2328',
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',

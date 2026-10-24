@@ -52,6 +52,13 @@ export type WorkspaceShellProps = {
   onCreateEvent: () => void;
   totalsStrip?: ReactNode;
   commandBar?: ReactNode;
+  /* F7′ (Recheck R2, phân xử coordinator): suppression bám theo BỀ MẶT
+     ĐANG XEM — đang ở mặt chi tiết đám tang/giỗ thì TOÀN chrome của
+     view đó trung tính (chấm sidebar của MỌI đám + «Chia sẻ» header +
+     gạch tab); ở các mặt cấp sổ khác accent bình thường. Shell nhận
+     prop này CHỈ để nhuộm trung tính các chi tiết chrome đó; phần thân
+     chi tiết tang/giỗ tự giữ kỷ luật riêng (event-face, TotalsStrip). */
+  suppressChromeAccent?: boolean;
   outboxChip?: ReactNode;
   shareMenu?: ReactNode;
   overflowMenu?: ReactNode;
@@ -78,6 +85,7 @@ export function WorkspaceShell({
   onCreateEvent,
   totalsStrip,
   commandBar,
+  suppressChromeAccent = false,
   outboxChip,
   shareMenu,
   overflowMenu,
@@ -85,26 +93,27 @@ export function WorkspaceShell({
   quickBarAction,
   children,
 }: WorkspaceShellProps) {
-  const faceLabel = FACE_LABELS[face];
-
-  const railSectionLabel = 'px-5 pt-5 pb-1.5 text-xs font-medium text-indigo-100';
+  const railSectionLabel =
+    'px-5 pt-5 pb-1.5 font-mono text-[11px] font-semibold tracking-[0.16em] text-muted uppercase';
   const railRow =
-    'flex min-h-11 w-full items-center gap-2 rounded-[10px] px-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-100';
+    'flex min-h-11 w-full items-center gap-2 rounded-[7px] px-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500';
 
   return (
     <div className="flex h-dvh flex-col bg-paper text-ink lg:grid lg:grid-cols-[264px_minmax(0,1fr)]">
-      {/* Rail — desktop */}
-      <aside className="hidden min-h-0 flex-col overflow-y-auto bg-indigo-950 text-white lg:flex">
-        <div className="flex items-center gap-2.5 px-5 pt-5">
+      {/* Rail — desktop: cột bìa sổ TRẮNG, kẻ dọc mảnh như gáy sổ (B′). */}
+      <aside className="hidden min-h-0 flex-col overflow-y-auto border-r border-line bg-card text-ink lg:flex">
+        <div className="masthead-rule mx-5 flex items-center gap-2.5 pt-5 pb-3">
           {/* eslint-disable-next-line @next/next/no-img-element -- logo là SVG tĩnh trong public/ (asset nội bộ cố định); next/image không tối ưu SVG nên <img> thẳng là đúng */}
           <img
             src="/products/brand/sodam-logo.svg"
             alt=""
             width={32}
             height={32}
-            className="size-8 shrink-0 rounded-lg"
+            className="size-8 shrink-0 rounded-[7px]"
           />
-          <p className="text-[17px] font-semibold">Sổ Đám</p>
+          <p className="font-mono text-[15px] font-bold tracking-[0.18em] uppercase">
+            Sổ<span className="text-indigo-700">·</span>Đám
+          </p>
         </div>
 
         <p className={railSectionLabel}>Sổ</p>
@@ -118,8 +127,8 @@ export function WorkspaceShell({
               className={cn(
                 railRow,
                 b.id === activeBookId
-                  ? 'bg-indigo-800 font-semibold text-white'
-                  : 'text-indigo-100 hover:bg-indigo-800 hover:text-white',
+                  ? 'bg-indigo-50 font-semibold text-ink'
+                  : 'text-muted hover:bg-indigo-50 hover:text-ink',
               )}
             >
               <span className="min-w-0 flex-1 truncate">{b.name}</span>
@@ -128,10 +137,7 @@ export function WorkspaceShell({
           <button
             type="button"
             onClick={onCreateBook}
-            className={cn(
-              railRow,
-              'font-medium text-indigo-100 hover:bg-indigo-800 hover:text-white',
-            )}
+            className={cn(railRow, 'font-medium text-muted hover:bg-indigo-50 hover:text-ink')}
           >
             <Plus className="size-4 shrink-0" aria-hidden /> Tạo sổ
           </button>
@@ -151,11 +157,21 @@ export function WorkspaceShell({
                 className={cn(
                   railRow,
                   active
-                    ? 'bg-indigo-800 font-semibold text-white'
-                    : 'text-indigo-100 hover:bg-indigo-800 hover:text-white',
+                    ? 'bg-indigo-50 font-semibold text-ink'
+                    : 'text-muted hover:bg-indigo-50 hover:text-ink',
                 )}
               >
-                <span className={cn('size-2 shrink-0 rounded-full', style.dot)} aria-hidden />
+                {/* F7′ (Recheck R2): ở mặt chi tiết đám tang/giỗ, chấm
+                    của MỌI đám trong rail về trung tính — suppression
+                    bám theo bề mặt đang xem. Ở mọi mặt khác, chấm là
+                    DANH TÍNH của chính đám đó (GROUP_STYLE). */}
+                <span
+                  className={cn(
+                    'size-2 shrink-0 rounded-full',
+                    suppressChromeAccent ? 'bg-muted' : style.dot,
+                  )}
+                  aria-hidden
+                />
                 <span className="min-w-0 flex-1 truncate">{e.title}</span>
               </button>
             );
@@ -163,10 +179,7 @@ export function WorkspaceShell({
           <button
             type="button"
             onClick={onCreateEvent}
-            className={cn(
-              railRow,
-              'font-medium text-indigo-100 hover:bg-indigo-800 hover:text-white',
-            )}
+            className={cn(railRow, 'font-medium text-muted hover:bg-indigo-50 hover:text-ink')}
           >
             <Plus className="size-4 shrink-0" aria-hidden /> Tạo đám
           </button>
@@ -185,13 +198,13 @@ export function WorkspaceShell({
                 className={cn(
                   railRow,
                   active
-                    ? 'bg-indigo-800 font-semibold text-white'
-                    : 'text-indigo-100 hover:bg-indigo-800 hover:text-white',
+                    ? 'bg-indigo-50 font-semibold text-ink'
+                    : 'text-muted hover:bg-indigo-50 hover:text-ink',
                 )}
               >
                 <span className="min-w-0 flex-1 truncate">{FACE_LABELS[f]}</span>
                 {f === 'returns' && returnsBadge ? (
-                  <span className="inline-flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-gold-soft px-1.5 font-mono text-xs font-semibold text-gold-ink tabular-nums">
+                  <span className="inline-flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-indigo-50 px-1.5 font-mono text-xs font-semibold text-ink tabular-nums">
                     {returnsBadge}
                   </span>
                 ) : null}
@@ -208,9 +221,8 @@ export function WorkspaceShell({
         {/* Thanh trên — desktop */}
         <header className="hidden min-h-[52px] items-center gap-3 border-b border-line bg-card px-5 lg:flex">
           <div className="min-w-0 flex-1">
-            {/* B6: dòng điều hướng KHÔNG lặp nguyên văn H1 (tên sổ) — chỉ nói
-                đang xem mặt nào; tên sổ là H1 duy nhất bên dưới. */}
-            <p className="truncate text-xs text-muted">Đang xem: {faceLabel}</p>
+            {/* F14 (Panel R1): bỏ meta-text thuyết minh «Đang xem: …»
+                khỏi UI — sidebar đã tô vị trí; tên sổ là H1 duy nhất. */}
             <h1 className="truncate text-[17px] leading-tight font-semibold">{bookName}</h1>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -237,40 +249,11 @@ export function WorkspaceShell({
             </div>
           </div>
 
-          <div
-            className="flex gap-1.5 overflow-x-auto px-3 pb-2"
-            role="group"
-            aria-label="Chọn đám"
-          >
-            {events.map((e) => {
-              const style = GROUP_STYLE[groupOfKind(e.kind)];
-              const active = e.id === activeEventId && face === 'event';
-              return (
-                <button
-                  key={e.id}
-                  type="button"
-                  onClick={() => onSelectEvent(e.id)}
-                  aria-pressed={active}
-                  className={cn(
-                    'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
-                    active
-                      ? cn('font-semibold', style.selectedChip)
-                      : 'border-line-strong bg-card text-ink',
-                  )}
-                >
-                  <span className={cn('size-2 shrink-0 rounded-full', style.dot)} aria-hidden />
-                  {e.title}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={onCreateEvent}
-              className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full border border-line-strong bg-card px-3 text-sm font-medium whitespace-nowrap text-indigo-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-            >
-              <Plus className="size-4" aria-hidden /> Tạo đám
-            </button>
-          </div>
+          {/* F5 (Panel R1): BỎ hàng pill chọn đám ở mobile — pill bị cắt
+              cụt giữa chữ và chồng cơ chế với dropdown chọn đám trong
+              CommandBar. Mobile nay chỉ còn MỘT cơ chế chọn đám duy nhất:
+              ô chọn (dropdown) cạnh nút ghi khoản. Tạo đám vẫn tới được
+              từ mặt Tổng quan / ô chọn khi chưa có đám. */}
 
           <nav aria-label="Các mục xem sổ" className="flex px-2">
             {FACE_ORDER.map((f) => {
@@ -283,18 +266,24 @@ export function WorkspaceShell({
                   aria-current={active ? 'true' : undefined}
                   className={cn(
                     'relative inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 px-1 text-sm whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
-                    active ? 'font-semibold text-indigo-700' : 'font-medium text-muted',
+                    active ? 'font-semibold text-ink' : 'font-medium text-muted',
                   )}
                 >
                   {FACE_LABELS[f]}
                   {f === 'returns' && returnsBadge ? (
-                    <span className="inline-flex min-h-6 min-w-6 items-center justify-center rounded-full bg-gold-soft px-1 font-mono text-xs font-semibold text-gold-ink tabular-nums">
+                    <span className="inline-flex min-h-6 min-w-6 items-center justify-center rounded-full bg-indigo-50 px-1 font-mono text-xs font-semibold text-ink tabular-nums">
                       {returnsBadge}
                     </span>
                   ) : null}
                   {active ? (
+                    // F7′: gạch chân tab thuộc chrome của view đang xem —
+                    // ở mặt chi tiết tang/giỗ nó về MỰC trung tính; ở các
+                    // mặt cấp sổ giữ accent thường.
                     <span
-                      className="absolute right-2 bottom-0 left-2 h-0.5 bg-indigo-700"
+                      className={cn(
+                        'absolute right-2 bottom-0 left-2 h-0.5',
+                        suppressChromeAccent ? 'bg-ink' : 'bg-indigo-700',
+                      )}
                       aria-hidden
                     />
                   ) : null}
@@ -321,22 +310,23 @@ export function WorkspaceShell({
 
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
 
-        {/* Thanh ghi nhanh ghim đáy — mobile */}
-        <div
-          className="flex min-h-[52px] items-center gap-3 border-t border-line bg-card px-4 py-2 lg:hidden"
-          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-        >
-          {mobileTotal ? (
-            <div className="min-w-0">
-              <p className="text-xs text-muted">{mobileTotal.label}</p>
-              <p className="truncate font-mono text-[15px] font-semibold tabular-nums">
-                {mobileTotal.value}
-              </p>
-            </div>
-          ) : null}
-          {outboxChip}
-          {quickBarAction ? <div className="ml-auto shrink-0">{quickBarAction}</div> : null}
-        </div>
+        {/* Thanh hành động ghim đáy — mobile. F10: thanh này là nơi DUY
+            NHẤT còn nút «Ghi khoản» ở mobile (nút ở CommandBar chỉ hiện
+            ở desktop) và KHÔNG lặp số «Còn giữ» (số đó sống một mình
+            trong TotalsStrip). Không có hành động/hàng chờ thì không
+            dựng thanh. */}
+        {quickBarAction || outboxChip ? (
+          <div
+            className="flex min-h-[52px] items-center gap-3 border-t border-line bg-card px-4 py-2 lg:hidden"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          >
+            {mobileTotal ? (
+              <span className="sr-only">{`${mobileTotal.label}: ${mobileTotal.value}`}</span>
+            ) : null}
+            {outboxChip}
+            {quickBarAction ? <div className="ml-auto shrink-0">{quickBarAction}</div> : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -371,9 +361,13 @@ export function CommandBar({
 }) {
   return (
     <div className="flex min-h-12 flex-wrap items-center gap-2 border-b border-line bg-card px-4 py-1.5 lg:px-5">
-      <Btn onClick={onQuickEntry}>
-        <Plus className="size-4" aria-hidden /> Ghi khoản
-      </Btn>
+      {/* F10: ở mobile nút này TRÙNG với nút ghim đáy — chỉ hiện ở
+          desktop, mobile dùng đúng một nút ở thanh đáy. */}
+      <span className="hidden lg:inline-flex">
+        <Btn onClick={onQuickEntry}>
+          <Plus className="size-4" aria-hidden /> Ghi khoản
+        </Btn>
+      </span>
       {events.length > 0 ? (
         <label className="sr-only" htmlFor="sodam-event-select">
           Chọn đám đang xem
@@ -387,7 +381,12 @@ export function CommandBar({
           onChange={(e) => {
             if (e.target.value) onSelectEvent(e.target.value);
           }}
-          className="min-h-11 max-w-44 truncate rounded-[10px] border border-line-strong bg-card px-2.5 text-sm text-ink outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+          // W3-1 (Recheck R2, ghế 4 mục 8): tên đám là định danh chính
+          // của app — ô chọn phải hiện TRỌN tên. Bỏ hộp bó max-w-44:
+          // ô chiếm trọn một hàng riêng ở mobile (basis-full) và giãn
+          // linh hoạt tới 40rem ở desktop, đủ cho cả tên đám dài nhất
+          // của sổ fixture (64 ký tự ≈ 500px ở 14px).
+          className="min-h-11 w-full min-w-0 flex-1 basis-full rounded-[10px] border border-line-strong bg-card px-2.5 text-sm text-ink outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:w-auto sm:basis-80 sm:max-w-[40rem]"
         >
           <option value="" disabled>
             Chọn đám
@@ -444,6 +443,8 @@ export function TotalsStrip({
   pendingValue,
   pendingCount,
   terms,
+  hidePending = false,
+  hideTerms = false,
 }: {
   received: string;
   given: string;
@@ -453,6 +454,14 @@ export function TotalsStrip({
   pendingCount: number;
   /** Các hạng đã format sẵn (nhãn + tiền) từ totalsTerms() ở app.tsx. */
   terms?: Array<{ label: string; value: string }>;
+  /** F3 (Panel R1): trên mặt chi tiết đám TANG/GIỖ, khung nợ «Cần trả
+      lễ» không đè đầu màn — ẩn đúng hàng đó; các hàng tổng khác giữ. */
+  hidePending?: boolean;
+  /** W3-8 (Recheck R2, ghế 5): dòng PHÂN RÃ («Đã đi trong khoản đã
+      nhận … · Trả dư + đi đám …») là chữ tiền nong giải thích sổ —
+      không nằm trên mặt chi tiết tang/giỗ; giữ ở Tổng quan / Trả lễ /
+      chi tiết hỷ như cũ. */
+  hideTerms?: boolean;
 }) {
   const cells = [
     { label: 'Tổng đã nhận', value: received },
@@ -460,32 +469,49 @@ export function TotalsStrip({
     // lễ — khác cột "Đi đám" theo-người ở mặt Người (chỉ tính đám đi dự).
     { label: 'Tổng đã đi (đi đám + trả lễ)', value: given },
     { label: 'Còn giữ', value: kept },
-    {
-      label: pendingLabel,
-      value: pendingValue,
-      sub: pendingCount > 0 ? `${pendingCount} khoản` : undefined,
-    },
+    ...(hidePending
+      ? []
+      : [
+          {
+            label: pendingLabel,
+            value: pendingValue,
+            sub: pendingCount > 0 ? `${pendingCount} khoản` : undefined,
+          },
+        ]),
   ];
   return (
-    <section aria-label="Tổng của sổ" className="border-b border-line bg-card px-4 py-2 lg:px-5">
-      <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+    <section aria-label="Tổng của sổ" className="border-b border-line bg-card px-4 py-1 lg:px-5">
+      {/* B′: dải tổng là các HÀNG SỔ — nhãn trái, số Mono phải, hairline
+          ngăn hàng; không còn tường chữ wrap lộn xộn ở 390px. */}
+      <div className="divide-y divide-line">
         {cells.map((c) => (
-          <p key={c.label} className="text-sm whitespace-nowrap">
-            <span className="text-muted">{c.label} </span>
-            <span className="font-mono font-semibold tabular-nums">{c.value}</span>
-            {c.sub ? <span className="text-muted"> ({c.sub})</span> : null}
+          <p key={c.label} className="flex items-baseline justify-between gap-4 py-1.5 text-sm">
+            <span className="font-medium text-ink">
+              {c.label}
+              {c.sub ? <span> ({c.sub})</span> : null}
+            </span>
+            <span className="font-mono text-[15px] font-semibold whitespace-nowrap tabular-nums">
+              {c.value}
+            </span>
           </p>
         ))}
       </div>
       {/* Panel #02 mục 5 giữ nguyên kỷ luật: KHÔNG truncate — từng hạng là
           một khối nowrap, dòng phụ tự xuống dòng giữa các hạng để mọi con
-          số luôn hiện trọn trên mobile 390px. Hạng rỗng → không render. */}
-      {terms && terms.length > 0 ? (
-        <p className="mt-0.5 flex flex-wrap gap-x-2 font-mono text-xs tabular-nums text-muted">
+          số luôn hiện trọn trên mobile 390px. Hạng rỗng → không render.
+          TC5-1 (Panel #05): dấu «·» gắn ở CUỐI hạng trước, KHÔNG làm tiền
+          tố của hạng sau — khi wrap ở 320/390px dòng 2 không bao giờ bắt
+          đầu bằng «·»; ở 1440 dấu vẫn nối hai hạng trên một dòng. */}
+      {/* F9 (Panel R1, ghế 2): dòng chú thích này là CHỮ GÁNH NIỀM TIN
+          (giải thích vì sao 7,2 / 6,7 / 6,3tr khác nhau) — nâng cỡ + đậm,
+          nhãn tiếng người nhà thường, số giữ Mono đậm; hết cảnh dòng quan
+          trọng nhất lại nhỏ/mờ nhất màn. */}
+      {!hideTerms && terms && terms.length > 0 ? (
+        <p className="mt-0.5 flex flex-wrap gap-x-2 text-[13px] leading-relaxed font-medium text-ink">
           {terms.map((t, i) => (
             <span key={t.label} className="whitespace-nowrap">
-              {i > 0 ? '· ' : ''}
-              {t.label} {t.value}
+              {t.label} <span className="font-mono font-bold tabular-nums">{t.value}</span>
+              {i < terms.length - 1 ? ' ·' : ''}
             </span>
           ))}
         </p>
@@ -564,8 +590,59 @@ export function SegmentedTabs({
             onClick={() => onChange(opt.id)}
             className={cn(
               'inline-flex min-h-11 flex-1 items-center justify-center rounded-[10px] px-3 text-sm whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
+              // F16: trạng thái chọn phải NHÌN THẤY như nhau ở 390 và 1440 —
+              // nền trắng + viền đậm + bóng rõ, không chỉ đậm chữ.
               active
-                ? 'bg-card font-semibold text-indigo-700 shadow-[var(--shadow-card)]'
+                ? 'bg-card font-bold text-ink shadow-[var(--shadow-lift)] ring-1 ring-line-strong'
+                : 'font-medium text-muted hover:text-ink',
+            )}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* W4-2 (Panel final R3, ghế 3): hàng chọn theo NGÔN NGỮ SỔ — chữ trần
+   trên kẻ ngang, ngăn bằng kẻ dọc, mục đang chọn = chữ đậm + gạch mực
+   ở chân ô; KHÔNG khay pill/nền/viên nổi. Cùng cơ chế với toggle
+   «Gõ tay/Giọng nói» đã duyệt ở W3-5 (panels/quick-entry.tsx). Dùng ở
+   mặt tiền (Tạo sổ / Vào bằng mã) và thanh lọc Trả lễ; SegmentedTabs
+   giữ nguyên cho các chỗ ngoài hợp đồng W4. */
+export function LedgerTabs({
+  options,
+  value,
+  onChange,
+  ariaLabel,
+  className,
+}: {
+  options: Array<{ id: string; label: string }>;
+  value: string;
+  onChange: (id: string) => void;
+  ariaLabel: string;
+  className?: string;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label={ariaLabel}
+      className={cn('flex divide-x divide-line overflow-x-auto border-y border-line', className)}
+    >
+      {options.map((opt) => {
+        const active = value === opt.id;
+        return (
+          <button
+            key={opt.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(opt.id)}
+            className={cn(
+              'inline-flex min-h-11 flex-1 items-center justify-center px-3 text-sm whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset',
+              active
+                ? 'font-bold text-ink shadow-[inset_0_-2px_0_0_#1F2328]'
                 : 'font-medium text-muted hover:text-ink',
             )}
           >
@@ -580,45 +657,56 @@ export function SegmentedTabs({
 export function StatusPill({
   status,
   label,
+  accentDot = false,
 }: {
   status: 'OPEN' | 'DONE' | 'OVER' | 'SKIPPED' | 'PENDING';
   label?: string;
+  /** F9 (Panel R1): chấm accent cho «Chờ trả» — CHỈ nơi gọi thuộc phạm
+      vi hỷ mới truyền true; bề mặt tang/giỗ không bao giờ có chấm này. */
+  accentDot?: boolean;
 }) {
+  // F9: trạng thái phải phân biệt được bằng CHỮ ĐẬM + ICON RÕ cho mắt
+  // kém — cỡ chữ/icon nâng lên, nhãn font-bold, icon 16px nét đậm.
+  const base =
+    'inline-flex min-h-8 items-center gap-1.5 rounded-full bg-indigo-50 px-3 text-[13px] font-bold whitespace-nowrap text-ink';
   if (status === 'PENDING') {
     return (
-      <span className="inline-flex min-h-7 items-center gap-1 rounded-full bg-indigo-50 px-2.5 text-xs font-semibold text-indigo-700">
-        <Clock className="size-3.5" aria-hidden />
+      <span className={base}>
+        <Clock className="size-4" strokeWidth={2.4} aria-hidden />
         {label ?? 'Đang chờ gửi'}
       </span>
     );
   }
   if (status === 'DONE') {
     return (
-      <span className="inline-flex min-h-7 items-center gap-1 rounded-full bg-indigo-50 px-2.5 text-xs font-semibold text-green-ink">
-        <Check className="size-3.5" aria-hidden />
+      <span className={base}>
+        <Check className="size-4" strokeWidth={2.6} aria-hidden />
         {label ?? 'Đã trả'}
       </span>
     );
   }
   if (status === 'OVER') {
     return (
-      <span className="inline-flex min-h-7 items-center gap-1 rounded-full bg-indigo-50 px-2.5 text-xs font-semibold text-gold-ink">
-        <TriangleAlert className="size-3.5" aria-hidden />
+      <span className={base}>
+        <TriangleAlert className="size-4" strokeWidth={2.4} aria-hidden />
         {label ?? 'Trả dư'}
       </span>
     );
   }
   if (status === 'SKIPPED') {
     return (
-      <span className="inline-flex min-h-7 items-center gap-1 rounded-full bg-indigo-50 px-2.5 text-xs font-semibold text-muted">
-        <Minus className="size-3.5" aria-hidden />
+      <span className={base}>
+        <Minus className="size-4" strokeWidth={2.6} aria-hidden />
         {label ?? 'Bỏ qua'}
       </span>
     );
   }
   return (
-    <span className="inline-flex min-h-7 items-center gap-1 rounded-full bg-amber-soft px-2.5 text-xs font-semibold text-amber-ink">
-      <Clock className="size-3.5" aria-hidden />
+    <span className={base}>
+      {accentDot ? (
+        <span className="size-2 shrink-0 rounded-full bg-indigo-700" aria-hidden />
+      ) : null}
+      <Clock className="size-4" strokeWidth={2.4} aria-hidden />
       {label ?? 'Chờ trả'}
     </span>
   );
@@ -714,14 +802,14 @@ export function EmptyLedger({
           aria-hidden
         >
           {/* Bát hương ba nén — cùng glyph kỷ luật với icon đám tang */}
-          <path d="M76 34c-3.5-5.5 3.5-8.5 0-14" stroke="#3B4054" strokeWidth="2.5" />
-          <path d="M100 30c-3.5-5.5 3.5-8.5 0-14" stroke="#3B4054" strokeWidth="2.5" />
-          <path d="M124 34c-3.5-5.5 3.5-8.5 0-14" stroke="#3B4054" strokeWidth="2.5" />
-          <path d="M76 40v26M100 36v30M124 40v26" stroke="#3B4054" strokeWidth="2.5" />
-          <path d="M52 66h96a48 30 0 0 1-96 0Z" fill="#EDEEF3" stroke="#3B4054" strokeWidth="2.5" />
-          <path d="M78 108h44" stroke="#3B4054" strokeWidth="2.5" />
+          <path d="M76 34c-3.5-5.5 3.5-8.5 0-14" stroke="#454C54" strokeWidth="2.5" />
+          <path d="M100 30c-3.5-5.5 3.5-8.5 0-14" stroke="#454C54" strokeWidth="2.5" />
+          <path d="M124 34c-3.5-5.5 3.5-8.5 0-14" stroke="#454C54" strokeWidth="2.5" />
+          <path d="M76 40v26M100 36v30M124 40v26" stroke="#454C54" strokeWidth="2.5" />
+          <path d="M52 66h96a48 30 0 0 1-96 0Z" fill="#F6F8FA" stroke="#454C54" strokeWidth="2.5" />
+          <path d="M78 108h44" stroke="#454C54" strokeWidth="2.5" />
           {/* Dòng kẻ sổ trầm dưới bát hương — chờ ghi, không xu, không bút */}
-          <path d="M64 122h72" stroke="#7E85AB" strokeWidth="2.5" />
+          <path d="M64 122h72" stroke="#8C959F" strokeWidth="2.5" />
         </svg>
         <p className="mt-4 text-[15px] font-semibold text-ink">{title}</p>
         <p className="mt-1 max-w-sm text-sm leading-relaxed text-muted">{body}</p>
@@ -739,28 +827,15 @@ export function EmptyLedger({
         strokeLinejoin="round"
         aria-hidden
       >
-        {/* Sổ mở hai trang */}
-        <path
-          d="M100 22c-13-8.5-30-11-48-8.5v96c18-2.5 35 0 48 8.5 13-8.5 30-11 48-8.5v-96c-18-2.5-35 0-48 8.5Z"
-          fill="#F0F1F8"
-          stroke="#323C85"
-          strokeWidth="2.5"
-        />
-        <path d="M100 22v96.5" stroke="#323C85" strokeWidth="2.5" />
-        {/* Dòng kẻ chờ ghi — trang trái */}
-        <path d="M64 44h24M64 60h24M64 76h16" stroke="#7E85AB" strokeWidth="2.5" />
-        {/* Dòng kẻ chờ ghi — trang phải */}
-        <path d="M112 44h24M112 60h24M112 76h16" stroke="#7E85AB" strokeWidth="2.5" />
-        {/* Đồng xu vàng chưa ghi khoản nào */}
-        <circle cx="160" cy="98" r="13" fill="#F3E5C3" stroke="#C9A24B" strokeWidth="2.5" />
-        <path d="M160 91v14M155.5 94.5h6.5a3 3 0 0 1 0 6h-5" stroke="#7A5A14" strokeWidth="2.2" />
-        {/* Nét bút chờ */}
-        <path
-          d="M38 108l14-4-4 14-3.5-6.5L38 108Z"
-          fill="#161A3D"
-          stroke="#161A3D"
-          strokeWidth="2"
-        />
+        {/* F13 (Panel R1): bỏ minh hoạ «sổ mở» stock + huy hiệu ₫ + nét
+            bút/mũi tên vô danh — vẽ lại bằng đúng NGÔN NGỮ SỔ KẺ: một
+            trang sổ phẳng, lề dọc, các dòng kẻ chờ ghi và kẻ đôi khép
+            trang ở đáy. Không vật trang trí ngoài sổ. */}
+        <path d="M52 14h96v104H52z" fill="#F6F8FA" stroke="#1F2328" strokeWidth="2.5" />
+        <path d="M66 14v104" stroke="#8C959F" strokeWidth="2" />
+        <path d="M78 40h58M78 58h58M78 76h42" stroke="#8C959F" strokeWidth="2.5" />
+        <path d="M52 98h96" stroke="#1F2328" strokeWidth="2" />
+        <path d="M52 103h96" stroke="#1F2328" strokeWidth="2" />
       </svg>
       <p className="mt-4 text-[15px] font-semibold text-ink">{title}</p>
       <p className="mt-1 max-w-sm text-sm leading-relaxed text-muted">{body}</p>

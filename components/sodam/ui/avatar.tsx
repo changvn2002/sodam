@@ -51,17 +51,36 @@ import { cn } from '@/lib/utils';
  * avatar người viếng tang phải trang trọng ở mọi bề mặt, kể cả Tổng quan.
  */
 const AVATAR_TONES = [
-  { bg: '161A3D', fg: 'F0F1F8' }, // indigo-950 / indigo-50
-  { bg: '1E2456', fg: 'F3E5C3' }, // indigo-900 / gold-soft
-  { bg: '323C85', fg: 'F0F1F8' }, // indigo-700 / indigo-50
-  { bg: 'F3E5C3', fg: '7A5A14' }, // gold-soft / gold-ink
-  { bg: 'F0F1F8', fg: '161A3D' }, // indigo-50 / indigo-950
+  // B′ «Trang Sổ Kẻ» (2026-10-24): initials NÉP vào thế giới sổ — toàn xám
+  // trung tính Primer, cỡ khiêm tốn; 0 màu bản sắc, 0 vàng, 0 chàm. Màu vẫn
+  // CHỈ suy từ seed của chính người đó (ổn định mọi bề mặt, kể cả tang/giỗ).
+  { bg: 'ECEFF2', fg: '454C54' },
+  { bg: 'E4E8EC', fg: '1F2328' },
+  { bg: 'F6F8FA', fg: '59636E' },
+  { bg: 'D8DEE4', fg: '1F2328' },
+  { bg: '59636E', fg: 'FFFFFF' },
 ] as const;
 
 function hashSeed(value: string): number {
   let h = 0;
   for (let i = 0; i < value.length; i += 1) h = (h * 31 + value.charCodeAt(i)) >>> 0;
   return h;
+}
+
+/**
+ * W3-4 (Recheck R2, ghế 4 mục 7): KHOÁ DANH TÍNH cho tông avatar.
+ * Kiểm chứng trên render thật + pixel của pack round-2 (probe-r3.cjs):
+ * tông của Chị Lan đã là #D8DEE4 KHỚP NHAU ở people/tree, cả 390 lẫn
+ * 1440 — không có trôi tông thật trong code hiện tại. Nguy cơ duy nhất
+ * còn lại đúng như ghế nghi: BIẾN THỂ CHUỖI TÊN hiển thị (thừa khoảng
+ * trắng, dạng tổ hợp NFD thay vì NFC, giãn cách giữa các từ) làm hash
+ * lệch và đổi tông cùng một người. Mọi khoá danh tính (seed của thư
+ * viện + khoá tông) đều đi qua hàm chuẩn hoá này trước: NFC, cắt
+ * khoảng đầu/cuối, gộp mọi dãy khoảng trắng thành một — cùng một
+ * người, mọi biến thể chuỗi đều cho đúng một tông/một glyph.
+ */
+export function normalizePersonKey(value: string): string {
+  return value.normalize('NFC').trim().replace(/\s+/g, ' ');
 }
 
 /** Màu avatar = hàm thuần của seed người đó — ổn định ở mọi bề mặt/ngữ cảnh. */
@@ -96,8 +115,10 @@ const dataUriCache = new Map<string, string>();
  * suy từ `seed` (id ổn định của thực thể) nếu có, mặc định từ `name`.
  */
 export function initialsDataUri(name: string, seed?: string): string {
-  const displayName = name.trim() || 'guest';
-  const toneKey = (seed ?? '').trim() || displayName;
+  // W3-4: cả tên (glyph) lẫn seed (tông) đều chuẩn hoá danh tính trước
+  // khi băm — biến thể chuỗi của cùng một người không đổi tông/glyph.
+  const displayName = normalizePersonKey(name) || 'guest';
+  const toneKey = normalizePersonKey(seed ?? '') || displayName;
   const cacheKey = `${toneKey}|${displayName}`;
   const cached = dataUriCache.get(cacheKey);
   if (cached) return cached;
@@ -135,13 +156,13 @@ export function BookAvatar({
         : size === 'xl'
           ? 'text-base'
           : 'text-xs';
-  const tone = toneFromSeed(name.trim() || 'so');
+  const tone = toneFromSeed(normalizePersonKey(name) || 'so');
   const label = initialsOf(name);
 
   return (
     <span
       className={cn(
-        'relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-2xl shadow-[inset_0_0_0_1px_rgba(22,26,61,0.18)] ring-1 ring-black/10',
+        'relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[7px] shadow-[inset_0_0_0_1px_rgba(31,35,40,0.18)] ring-1 ring-black/10',
         dim,
         className,
       )}
@@ -174,7 +195,18 @@ export function PersonAvatar({
   const dim =
     size === 'sm' ? 'size-8' : size === 'lg' ? 'size-12' : size === 'xl' ? 'size-14' : 'size-10';
   const px = size === 'sm' ? 64 : size === 'lg' ? 96 : size === 'xl' ? 112 : 80;
-  const uri = useMemo(() => initialsDataUri(name, seed), [name, seed]);
+  // F8 (Panel R1, ghế 4): cùng một người phải GIỐNG HỆT ở mọi bề mặt và
+  // mọi khổ — tông màu khoá theo TÊN HIỂN THỊ (thứ mắt người dùng đối
+  // chiếu), không theo id ngẫu nhiên của bản ghi: id đổi theo lần tạo dữ
+  // liệu khiến cùng một người lệch tông giữa các ảnh/màn. Hàm thuần
+  // initialsDataUri vẫn giữ cơ chế seed cho kiểm thử; lớp UI ghim seed
+  // bằng chính tên người. Đánh đổi ghi nhận: hai người trùng hệt tên
+  // hiển thị sẽ cùng tông (chữ tắt vốn cũng đã trùng hệt).
+  // W3-4 (Recheck R2): khoá này nay đi qua normalizePersonKey bên trong
+  // initialsDataUri (NFC + gộp khoảng trắng) — biến thể chuỗi của cùng
+  // một người không còn đường nào làm trôi tông nữa.
+  void seed;
+  const uri = useMemo(() => initialsDataUri(name, name), [name]);
 
   return (
     <span

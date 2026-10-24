@@ -70,8 +70,8 @@ describe('initialsDataUri — seed pins colour, name pins glyph', () => {
     expect(fills.size).toBeGreaterThan(1);
   });
 
-  it('only uses backgrounds from the indigo/gold redesign system', () => {
-    const allowed = new Set(['#161A3D', '#1E2456', '#323C85', '#F3E5C3', '#F0F1F8']);
+  it('only uses backgrounds from the B′ neutral-gray ledger system', () => {
+    const allowed = new Set(['#ECEFF2', '#E4E8EC', '#F6F8FA', '#D8DEE4', '#59636E']);
     for (const id of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']) {
       const fill = backgroundFill(decodeSvg(initialsDataUri('Trần Bình', id)));
       expect(fill).not.toBeNull();
@@ -91,7 +91,7 @@ describe('initialsDataUri — Panel #02 T-02: lacquer purged from the identity l
       expect(svg.toUpperCase()).not.toContain('B3352C');
       const fill = backgroundFill(svg);
       expect(fill).not.toBeNull();
-      expect(['#161A3D', '#1E2456', '#323C85', '#F3E5C3', '#F0F1F8']).toContain(fill);
+      expect(['#ECEFF2', '#E4E8EC', '#F6F8FA', '#D8DEE4', '#59636E']).toContain(fill);
     }
   });
 

@@ -9,6 +9,28 @@ phát hành gắn tag `vX.Y.Z` lên đúng commit đang chạy production và gh
 một dòng vào bảng cặp ở cuối file này: phiên bản → commit SHA → ngày
 deploy. "Về bản vX.Y.Z" khi rollback nghĩa là về commit của tag đó.
 
+## [1.3.0] — 2026-10-25 — Thiết kế lại «Trang Sổ Kẻ» (lệnh user 2026-10-24)
+
+### Changed
+
+- **Diện mạo mới toàn bộ** theo hướng thắng bỏ phiếu mù B′ «Trang Sổ Kẻ»: giấy trắng thuần, mực `#1F2328`, kẻ sổ, số tiền kiểu mono căn phải, nút chính đen; accent GitHub Primer `#0969DA` giữ byte-identical nhưng chỉ còn vai link/focus/trạng thái chọn. Kỷ luật mặt tang/giỗ: trung tính tuyệt đối kể cả chrome theo mặt đang xem (ruling F7′) — không màu mừng, không chữ mừng trên mặt tang.
+- **Điểm chạm ấm duy nhất cho mặt hỷ** (phán quyết parent theo đơn ghế văn hoá của panel): nhãn kicker «ĐÁM HỶ» dùng token riêng `--hy-ink` `#9C4A1F` (đất nung trầm, tương phản đo 6,15:1 trên trắng) — đúng 1 phần tử ấm trên mặt hỷ; mặt tang/giỗ đo 0 phần tử ấm. Mọi nơi khác giữ hệ màu sổ.
+- Câu mừng đúng giọng người nhà ở đầu mặt hỷ («Ngày vui của hai cháu — …») thay cho tín hiệu ấm bằng màu.
+
+### Fixed (đóng trong cùng đợt, đều có đo lại)
+
+- **TC5-2 (MEDIUM):** nút xoá quan hệ bị component nút nuốt `aria-label` — census sau sửa: 0 nút rỗng tên, nhãn đầy đủ «Xoá quan hệ {loại} giữa {A} và {B}».
+- TC5-1 (dải phân cách không đầu dòng), TC5-3 (không rò mã sổ trước cổng — DOM + vùng chọn đều chỉ `••••…BCDE`), TC5-4 (nhãn hạng 2 theo trạng thái), TC5-5(b) (tên đám dài wrap trọn, sw=cw).
+- M-1: token `focus` chép về đúng lớp của nó trong `design/tokens.json` (giá trị `#0969DA` không đổi).
+- F-3 phán quyết bằng render: cột số linh hoạt của hướng B — `100.000.000₫` ở 15px = 108px, không cắt ở 390.
+
+### Gates
+
+- Panel thị giác chấm bằng mắt trên pack: **PASS** — 5/5 ghế đạt chuẩn thiết kế tay, 4 ghế «PASS MẠNH», 0 tell chặn (pack vòng 4, 40 ảnh). Parent tự xem pack trước phát hành.
+- Suite **161/161** (giữ nguyên số test của v1.2.0 — đợt này không xoá/làm yếu test), typecheck sạch, format:check sạch, build PASS; tương phản 0/131 cặp dưới AA; chạm 145/145 ≥44px; tràn 0/20 mặt ở 320 + 390. Impeccable detect: 0 finding trên nguồn + 0 primary finding trên 5 mặt render.
+- Service worker `sodam-shell-v4`. Không đổi schema dữ liệu (0 file prisma) — deploy không đụng cấu trúc DB production.
+- Hồ sơ: docs/reviews/v1.3.0-review-record.md.
+
 ## [1.2.0] — sửa 2 MEDIUM của Panel #04 (TC-1 + F-R4-1)
 
 Phát hành ngày 2026-10-24, tag v1.2.0 — xem bảng cặp ở cuối file.

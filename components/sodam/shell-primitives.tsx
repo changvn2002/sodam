@@ -17,12 +17,7 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <section
-      className={cn(
-        'overflow-hidden rounded-xl border border-line bg-card shadow-[var(--shadow-card)]',
-        className,
-      )}
-    >
+    <section className={cn('overflow-hidden rounded-[7px] border border-line bg-card', className)}>
       {(title || action) && (
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-4 py-3.5 sm:px-5">
           <div className="min-w-0">
@@ -50,7 +45,9 @@ export function Field({
 }) {
   return (
     <label className="grid gap-1.5 text-ink">
-      <span className="text-sm font-medium">{label}</span>
+      <span className="font-mono text-[11px] font-semibold tracking-[0.14em] text-muted uppercase">
+        {label}
+      </span>
       {children}
       {error ? (
         <span role="alert" className="text-sm font-medium text-lacquer">
@@ -66,7 +63,7 @@ export function Input(props: React.ComponentProps<'input'>) {
     <input
       {...props}
       className={cn(
-        'min-h-12 w-full rounded-[10px] border border-line-strong bg-card px-3 text-base text-ink outline-none transition-colors placeholder:text-muted focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500',
+        'min-h-12 w-full rounded-[7px] border border-line-strong bg-card px-3 text-base text-ink outline-none transition-colors placeholder:text-muted focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500',
         props.className,
       )}
     />
@@ -78,13 +75,21 @@ export function Select(props: React.ComponentProps<'select'>) {
     <select
       {...props}
       className={cn(
-        'min-h-12 w-full rounded-[10px] border border-line-strong bg-card px-3 text-base text-ink outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500',
+        'min-h-12 w-full rounded-[7px] border border-line-strong bg-card px-3 text-base text-ink outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500',
         props.className,
       )}
     />
   );
 }
 
+/**
+ * Nút dùng chung — B′: hành động CHÍNH = mực đen (#1F2328); accent #0969DA
+ * chỉ còn ở focus ring (vai focus) và link. Danger giữ đỏ Primer, chỉ phá huỷ.
+ *
+ * TC5-2 (Panel #05, MEDIUM): Btn PHẢI forward `aria-label` (và các thuộc
+ * tính nút khác) xuống <button> thật — trước đây props bị nuốt khiến nút
+ * thùng rác xoá quan hệ có AX name rỗng tuyệt đối trên live.
+ */
 export function Btn({
   children,
   onClick,
@@ -92,6 +97,7 @@ export function Btn({
   className,
   type = 'button',
   disabled,
+  ...rest
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -99,17 +105,21 @@ export function Btn({
   className?: string;
   type?: 'button' | 'submit';
   disabled?: boolean;
-}) {
+} & Omit<
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  'children' | 'onClick' | 'type' | 'disabled' | 'className'
+>) {
   return (
     <button
       type={type}
       disabled={disabled}
       onClick={onClick}
+      {...rest}
       className={cn(
-        'inline-flex min-h-11 items-center justify-center gap-2 rounded-[10px] px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:pointer-events-none disabled:opacity-45',
-        variant === 'primary' && 'bg-indigo-700 text-white hover:bg-indigo-600',
+        'inline-flex min-h-11 items-center justify-center gap-2 rounded-[7px] px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:pointer-events-none disabled:opacity-45',
+        variant === 'primary' && 'bg-ink text-white hover:bg-indigo-800',
         variant === 'secondary' && 'border border-line-strong bg-card text-ink hover:bg-indigo-50',
-        variant === 'ghost' && 'text-indigo-700 hover:bg-indigo-50',
+        variant === 'ghost' && 'text-ink hover:bg-indigo-50',
         variant === 'danger' && 'bg-lacquer text-white hover:bg-lacquer/90',
         className,
       )}
