@@ -67,3 +67,41 @@ export function knownBookCodes(): string[] {
 export function codeForBook(id: string): string | null {
   return readAll().find((b) => b.id === id)?.inviteCode ?? null;
 }
+
+/* ------------------------------------------------------------------ */
+/* W3 (PWA-FIX 6.3, PWA-31): sổ mở gần nhất — để reload khi đang xem  */
+/* trong sổ tự vào lại đúng sổ đó thay vì văng về landing. Chỉ là id  */
+/* của sổ (không chứa mã mời — mã vẫn chỉ sống trong registry ở trên, */
+/* và việc khôi phục phải đối chiếu id này còn trong registry/server  */
+/* mới được vào, xem app.tsx). Xoá khi người dùng chủ động về landing */
+/* để reload ở landing không tự nhảy lại vào sổ.                      */
+/* ------------------------------------------------------------------ */
+const LAST_BOOK_KEY = 'sodam_last_book_v1';
+
+export function rememberLastBook(id: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LAST_BOOK_KEY, id);
+  } catch {
+    // Storage bị chặn — mất khôi phục sau reload, luồng chính vẫn chạy.
+  }
+}
+
+export function lastBookId(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(LAST_BOOK_KEY);
+    return raw && raw.trim() ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearLastBook() {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(LAST_BOOK_KEY);
+  } catch {
+    // Bị chặn — không còn gì làm được, bỏ qua.
+  }
+}

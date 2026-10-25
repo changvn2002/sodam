@@ -1,9 +1,10 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SodamApi } from '../api';
 import type { SodamEvent, SodamEventKind, SodamEventRole } from '../api/types';
 import { cn } from '@/lib/utils';
+import { clearDraft, draftKey, loadDraft, saveDraft } from '../lib/draft-store';
 import { EVENT_KIND_LABELS, EVENT_KIND_ORDER, kindLabel } from '../lib/event-kinds';
 import { GROUP_STYLE, groupOfKind } from '../lib/lexicon';
 import { Btn, Field, Input, SegmentedTabs, Sheet } from '../shell';
@@ -75,6 +76,61 @@ export function CreateEventSheet({
   const titleRef = useRef<HTMLInputElement>(null);
   const dates = eventDateLabels(date);
 
+  /* W2 (PWA-FIX, cùng chuẩn PWA-31): nháp tạo đám bền theo bookId ở
+     localStorage — {title, kind, role, date} khác mặc định thì tự lưu,
+     mở lại sheet thì khôi phục, tạo thành công thì xoá nháp. Sheet này
+     luôn mounted (chỉ ẩn bằng `open`) nên khôi phục chạy khi `open`
+     bật; effect persist bỏ qua lần chạy đầu sau khi mở để không ghi
+     đè nháp trước lúc khôi phục. */
+  const eventDraftKey = draftKey('create-event', bookId);
+  const initialDateRef = useRef(date);
+  const persistArmedRef = useRef(false);
+  // Sau khi tạo thành công: chặn persist ghi lại nháp vừa xoá trong
+  // lúc state reset (title='') chạy trước khi sheet kịp đóng.
+  const justCreatedRef = useRef(false);
+
+  useEffect(() => {
+    if (!open) return;
+    justCreatedRef.current = false;
+    const saved = loadDraft<{
+      title?: unknown;
+      kind?: unknown;
+      role?: unknown;
+      date?: unknown;
+    }>(eventDraftKey);
+    if (saved) {
+      if (typeof saved.title === 'string') setTitle(saved.title);
+      if (
+        typeof saved.kind === 'string' &&
+        (EVENT_KIND_ORDER as string[]).includes(saved.kind)
+      ) {
+        setKind(saved.kind as SodamEventKind);
+      }
+      if (saved.role === 'HOSTED' || saved.role === 'ATTENDED') setRole(saved.role);
+      if (typeof saved.date === 'string' && saved.date) setDate(saved.date);
+    }
+    // Khôi phục mỗi lần sheet mở; eventDraftKey đổi theo bookId.
+  }, [open, eventDraftKey]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (justCreatedRef.current) return;
+    if (!persistArmedRef.current) {
+      persistArmedRef.current = true;
+      return;
+    }
+    const hasContent =
+      title.trim() !== '' ||
+      kind !== 'CUOI' ||
+      role !== 'HOSTED' ||
+      date !== initialDateRef.current;
+    if (!hasContent) {
+      clearDraft(eventDraftKey);
+      return;
+    }
+    saveDraft(eventDraftKey, { title, kind, role, date });
+  }, [open, eventDraftKey, title, kind, role, date]);
+
   const create = async (ghiNgay: boolean) => {
     if (!title.trim()) {
       setTitleError('Chưa nhập tên đám — gõ một tên để nhà mình dễ nhận ra.');
@@ -90,6 +146,9 @@ export function CreateEventSheet({
         role,
         occurredOn: date || undefined,
       });
+      // Tạo thành công → xoá nháp (W2).
+      justCreatedRef.current = true;
+      clearDraft(eventDraftKey);
       setTitle('');
       onCreated(ev, ghiNgay);
     } catch (e) {

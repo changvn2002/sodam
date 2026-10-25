@@ -80,7 +80,14 @@ async function clearApplied(ids: string[]) {
  * offline UI (banner + outbox chip).
  */
 export function useSodamOffline(api: SodamApi) {
-  const [online, setOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
+  // Hydration discipline: the first render MUST be identical on server and
+  // client. Reading `navigator.onLine` in the initializer breaks that —
+  // Node ≥21 has a global `navigator` without `onLine`, so the old
+  // `typeof navigator` guard still evaluated to `undefined` (falsy) on the
+  // server, SSR emitted the offline banner, the online client did not, and
+  // every load threw React #418. Start from the SSR default (`true`) and
+  // sync the real value in the mount effect below.
+  const [online, setOnline] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [flushFailed, setFlushFailed] = useState(false);
   const lastBookIdRef = useRef<string | null>(null);
@@ -146,6 +153,10 @@ export function useSodamOffline(api: SodamApi) {
   );
 
   useEffect(() => {
+    // Sync the real connectivity once on mount (see initializer note):
+    // an actually-offline client gets its banner here, one tick after
+    // hydration, instead of via a server/client render mismatch.
+    setOnline(navigator.onLine);
     const on = () => {
       setOnline(true);
       // Back online: replay the bound book's queue automatically, then the

@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SodamApi } from '../api';
 import type { SodamBook } from '../api/types';
-import { knownBooks } from '../lib/book-store';
+import { knownBooks, type KnownBook } from '../lib/book-store';
+import { clearDraft, draftKey, loadDraft, saveDraft } from '../lib/draft-store';
 import { Btn, EmptyLedger, Field, Input, LedgerTabs, formatInviteCode } from '../shell';
 import { BookAvatar } from '../ui/avatar';
 import { OfflineBanner } from '../ui/offline-ui';
@@ -50,6 +51,53 @@ export function HomeView({
     }
   }, [linkJoinError]);
 
+  /* W2 (PWA-FIX, mục 6.1 + PWA-31): nháp landing bền qua reload.
+     {tab, name} → localStorage; MÃ MỜI → sessionStorage CHỈ (mã là
+     credential: sống qua reload, chết khi đóng tab, không nằm lâu dài
+     trên máy — quyết định bảo mật trong PWA-FIX-STATE). Khôi phục ở
+     effect mount (không dùng lazy state để tránh lệch hydration);
+     effect persist bỏ qua lần chạy đầu (trước khôi phục) để không ghi
+     đè nháp bằng giá trị mặc định. Vào sổ thành công → xoá mã đã lưu. */
+  const homeDraftKey = draftKey('home-landing');
+  const codeDraftKey = draftKey('home-invite-code');
+  const persistArmedRef = useRef(false);
+
+  useEffect(() => {
+    const saved = loadDraft<{ tab?: unknown; name?: unknown }>(homeDraftKey);
+    if (saved) {
+      if (!linkJoinError && (saved.tab === 'create' || saved.tab === 'join')) setTab(saved.tab);
+      if (typeof saved.name === 'string') setName(saved.name);
+    }
+    if (!linkJoinError) {
+      const savedCode = loadDraft<{ code?: unknown }>(codeDraftKey, 'session');
+      if (savedCode && typeof savedCode.code === 'string' && savedCode.code) {
+        setCode(savedCode.code);
+      }
+    }
+    // Chỉ chạy lúc mount; linkJoinError tại thời điểm mount là đủ.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!persistArmedRef.current) {
+      persistArmedRef.current = true;
+      return;
+    }
+    saveDraft(homeDraftKey, { tab, name });
+    if (code) saveDraft(codeDraftKey, { code }, 'session');
+    else clearDraft(codeDraftKey, 'session');
+  }, [tab, name, code, homeDraftKey, codeDraftKey]);
+
+  /* W2 (mục 3.5 + PWA-16/17): khi bàn phím mở, nút submit phải TỚI
+     ĐƯỢC — focus ô tên sổ / mã mời thì sau 350ms (chờ bàn phím trượt
+     lên và viewport co lại) cuộn nút submit của ĐÚNG form đang nhập
+     vào vùng nhìn bằng scrollIntoView({block:'nearest'}). */
+  const revealSubmitOnFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    const submit = e.currentTarget.form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (!submit) return;
+    window.setTimeout(() => submit.scrollIntoView({ block: 'nearest' }), 350);
+  };
+
   // Tổng đã nhận của từng sổ (để hàng sổ đủ thông tin) — lỗi thì bỏ qua, hàng vẫn mở được.
   useEffect(() => {
     let cancelled = false;
@@ -68,7 +116,14 @@ export function HomeView({
     };
   }, [api, books]);
 
-  const known = knownBooks();
+  /* Hydration discipline (W4, PWA-FIX 5.6): KHÔNG đọc localStorage trong
+     lúc render — server luôn render danh sách rỗng, client render lần đầu
+     có registry là lệch text với SSR → React #418 cho mọi người dùng cũ.
+     Đọc vào state ở effect mount (cùng nhịp với `books` nạp qua API). */
+  const [known, setKnown] = useState<KnownBook[]>([]);
+  useEffect(() => {
+    setKnown(knownBooks());
+  }, []);
   const shownBooks: Array<{ id: string; name: string; inviteCode: string }> =
     books.length > 0
       ? books
@@ -97,7 +152,8 @@ export function HomeView({
 
   return (
     <div className="min-h-dvh bg-paper text-ink">
-      <div className="mx-auto w-full max-w-2xl px-4 py-5 sm:px-6">
+      {/* W2 (PWA-03/3.5): đệm đáy landing gồm safe-area — max(2rem, inset). */}
+      <div className="mx-auto w-full max-w-2xl px-4 pt-5 pb-[max(2rem,env(safe-area-inset-bottom))] sm:px-6">
         <header className="masthead-rule flex min-h-14 items-center gap-3 pb-2">
           {/* eslint-disable-next-line @next/next/no-img-element -- logo là SVG tĩnh trong public/ (asset nội bộ cố định); next/image không tối ưu SVG nên <img> thẳng là đúng */}
           <img
@@ -161,6 +217,7 @@ export function HomeView({
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                onFocus={revealSubmitOnFocus}
                 placeholder="Ví dụ: Sổ nhà, Sổ cưới 2026"
                 autoComplete="off"
               />
@@ -177,7 +234,12 @@ export function HomeView({
               if (busy || code.replace(/\s/g, '').length < 3) return;
               setBusy(true);
               void onJoin(code)
-                .then((err) => setJoinError(err))
+                .then((err) => {
+                  setJoinError(err);
+                  // Vào sổ thành công → mã mời không còn là nháp: xoá
+                  // bản lưu ở sessionStorage ngay.
+                  if (!err) clearDraft(codeDraftKey, 'session');
+                })
                 .finally(() => setBusy(false));
             }}
           >
@@ -185,6 +247,7 @@ export function HomeView({
               <Input
                 value={formatInviteCode(code)}
                 onChange={(e) => setCode(e.target.value.replace(/\s/g, '').toUpperCase())}
+                onFocus={revealSubmitOnFocus}
                 placeholder="VD: A1B2 C3D4 E5F6 G7H8"
                 // F11 (Panel R1): khi có lỗi, VIỀN Ô theo lỗi (đỏ) —
                 // không để viền focus xanh dương đánh nhau với dòng lỗi.
@@ -195,7 +258,12 @@ export function HomeView({
                 }
                 style={joinError ? { borderColor: '#D1242F' } : undefined}
                 aria-invalid={joinError ? true : undefined}
-                autoComplete="off"
+                // W2 (mục 3.2 + PWA-13): mã mời là mã dùng một lần gồm
+                // chữ + số → one-time-code + tự viết hoa, KHÔNG ép
+                // inputmode numeric.
+                autoComplete="one-time-code"
+                autoCapitalize="characters"
+                spellCheck={false}
               />
             </Field>
             <p className="text-sm text-muted">

@@ -126,6 +126,30 @@ html,
 body {
   background: var(--paper);
   color: var(--ink);
+  /* PWA-08: chặn pull-to-refresh / scroll-chaining ngoài ý muốn ở cấp trang. */
+  overscroll-behavior-y: none;
+  /* PWA-18: hết delay 300ms + double-tap zoom ngoài ý muốn. */
+  touch-action: manipulation;
+}
+
+/* PWA-18: touch-action không kế thừa — áp cho mọi phần tử tương tác chính. */
+button,
+a,
+[role='button'],
+input,
+select,
+textarea,
+label {
+  touch-action: manipulation;
+}
+
+/* PWA-20: phản hồi nhấn nhìn thấy được cho mọi nút/link (nhẹ, chỉ
+   transform/opacity; reduced-motion tắt transform ở khối dưới). */
+button:active,
+a:active,
+[role='button']:active {
+  opacity: 0.82;
+  transform: scale(0.98);
 }
 
 body {
@@ -203,5 +227,11 @@ body {
   .animate-fade,
   .animate-face {
     animation: none;
+  }
+
+  button:active,
+  a:active,
+  [role='button']:active {
+    transform: none;
   }
 }

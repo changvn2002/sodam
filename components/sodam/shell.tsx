@@ -318,7 +318,7 @@ export function WorkspaceShell({
         {quickBarAction || outboxChip ? (
           <div
             className="flex min-h-[52px] items-center gap-3 border-t border-line bg-card px-4 py-2 lg:hidden"
-            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+            style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
           >
             {mobileTotal ? (
               <span className="sr-only">{`${mobileTotal.label}: ${mobileTotal.value}`}</span>
@@ -386,7 +386,7 @@ export function CommandBar({
           // ô chiếm trọn một hàng riêng ở mobile (basis-full) và giãn
           // linh hoạt tới 40rem ở desktop, đủ cho cả tên đám dài nhất
           // của sổ fixture (64 ký tự ≈ 500px ở 14px).
-          className="min-h-11 w-full min-w-0 flex-1 basis-full rounded-[10px] border border-line-strong bg-card px-2.5 text-sm text-ink outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:w-auto sm:basis-80 sm:max-w-[40rem]"
+          className="min-h-11 w-full min-w-0 flex-1 basis-full rounded-[10px] border border-line-strong bg-card px-2.5 text-base text-ink outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:w-auto sm:basis-80 sm:max-w-[40rem]"
         >
           <option value="" disabled>
             Chọn đám
@@ -414,7 +414,7 @@ export function CommandBar({
             onChange={(e) => onSearchChange?.(e.target.value)}
             placeholder={searchPlaceholder ?? 'Tìm…'}
             aria-label={searchLabel ?? 'Tìm trong bảng'}
-            className="min-h-11 w-full rounded-[10px] border border-line-strong bg-card pr-3 pl-9 text-sm text-ink outline-none placeholder:text-muted focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+            className="min-h-11 w-full rounded-[10px] border border-line-strong bg-card pr-3 pl-9 text-base text-ink outline-none placeholder:text-muted focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
           />
         </div>
       ) : null}
@@ -730,7 +730,14 @@ export function Sheet({
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    // PWA-09: khoá cuộn nền khi sheet mở; khôi phục đúng giá trị cũ khi
+    // đóng/unmount (cleanup chạy ở cả hai đường).
+    const prevBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevBodyOverflow;
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -759,7 +766,14 @@ export function Sheet({
             <X className="size-5" />
           </button>
         </div>
-        <div className="overflow-y-auto px-4 py-4 sm:px-5">{children}</div>
+        {/* PWA-09: overscroll-contain chặn scroll-chaining sang nền.
+            PWA-03: đệm đáy gồm safe-area (tối thiểu 1rem như py-4 cũ). */}
+        <div
+          className="overflow-y-auto overscroll-contain px-4 pt-4 sm:px-5"
+          style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );

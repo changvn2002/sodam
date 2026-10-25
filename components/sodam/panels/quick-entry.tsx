@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SodamApi } from '../api';
 import type { SodamEvent, SodamParseResult, SodamPerson } from '../api/types';
 import { cn } from '@/lib/utils';
+import { clearDraft, draftKey, loadDraft, saveDraft } from '../lib/draft-store';
 import { kindLabel } from '../lib/event-kinds';
 import { GROUP_STYLE, groupOfKind, lexiconForKind } from '../lib/lexicon';
 import { Btn, Field, Input, Sheet } from '../shell';
@@ -68,6 +69,51 @@ export function QuickEntry({
   const [busy, setBusy] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
+
+  /* W2 (PWA-FIX, mục 6.2 + 6.6 + PWA-31): nháp ghi khoản bền theo
+     bookId ở localStorage. Có nội dung (tên hoặc số tiền) và chưa lưu
+     → tự lưu nháp; mở lại composer → khôi phục, CHỈ khi đám trong
+     nháp còn tồn tại trong `events`. Lưu thành công (online lẫn
+     offline-enqueue) → xoá nháp. Nhờ persist, đóng sheet bằng X khi
+     còn nháp không còn mất lặng — mở lại là thấy nháp, nên KHÔNG thêm
+     confirm dialog. Effect persist bỏ qua lần chạy đầu lúc mount để
+     không ghi đè nháp trước khi khôi phục. */
+  const entryDraftKey = draftKey('quick-entry', bookId);
+  const persistArmedRef = useRef(false);
+
+  useEffect(() => {
+    const saved = loadDraft<{
+      eventId?: unknown;
+      name?: unknown;
+      amount?: unknown;
+      mode?: unknown;
+    }>(entryDraftKey);
+    if (saved && typeof saved.eventId === 'string') {
+      const ev = events.find((e) => e.id === saved.eventId);
+      if (ev) {
+        setEvent(ev);
+        if (typeof saved.name === 'string') setName(saved.name);
+        if (typeof saved.amount === 'string') setAmount(saved.amount);
+        if (saved.mode === 'manual' || saved.mode === 'voice') setMode(saved.mode);
+      }
+    }
+    // Chỉ chạy lúc mount — composer được mount mới mỗi lần mở.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!persistArmedRef.current) {
+      persistArmedRef.current = true;
+      return;
+    }
+    if (savedInfo || queuedNote) return;
+    const hasContent = name.trim() !== '' || amount !== '';
+    if (!hasContent) {
+      clearDraft(entryDraftKey);
+      return;
+    }
+    saveDraft(entryDraftKey, { eventId: event?.id ?? null, name, amount, mode });
+  }, [entryDraftKey, event, name, amount, mode, savedInfo, queuedNote]);
 
   const [listening, setListening] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -211,6 +257,8 @@ export function QuickEntry({
           amountVnd: amountNum,
           source,
         });
+        // Đã vào hàng chờ = đã ghi — xoá nháp (W2).
+        clearDraft(entryDraftKey);
         setQueuedNote(true);
         onSaved();
         return;
@@ -224,6 +272,8 @@ export function QuickEntry({
         source,
         rawText: source === 'VOICE' ? transcript || undefined : undefined,
       });
+      // Lưu thành công → xoá nháp (W2).
+      clearDraft(entryDraftKey);
       // F1: KHÔNG toast nữa — xác nhận duy nhất là màn «Đã ghi vào sổ»
       // bên dưới (câu xác nhận theo giọng đám của lexicon được giữ làm
       // câu chính của màn đó). Tổng MỚI của đám lấy lại từ máy chủ để

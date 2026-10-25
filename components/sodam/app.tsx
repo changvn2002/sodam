@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createSodamApi, resolveSodamApiMode } from './api';
 import type { SodamBook, SodamDashboard, SodamEvent } from './api/types';
-import { knownBookCodes, rememberBook } from './lib/book-store';
+import {
+  clearLastBook,
+  knownBooks,
+  knownBookCodes,
+  lastBookId,
+  rememberBook,
+  rememberLastBook,
+} from './lib/book-store';
 import { totalsTerms } from './lib/totals-strip';
 import { useSodamOffline } from './lib/offline';
 import { groupOfKind, lexiconForKind } from './lib/lexicon';
@@ -22,6 +29,66 @@ import { EventFace } from './faces/event-face';
 import { ReturnsFace } from './faces/returns-face';
 import { PeopleFace } from './faces/people-face';
 import { TreeFace } from './faces/tree-face';
+
+/* ------------------------------------------------------------------ */
+/* W3 (PWA-FIX 6.5, PWA-33): history lớp cho SPA một URL «/».         */
+/*                                                                    */
+/* Sơ đồ lớp (dưới → trên):                                           */
+/*   [entry trình duyệt trước app] → landing → book → sheet (tối đa   */
+/*   1 sheet tại một thời điểm trong app.tsx)                         */
+/*                                                                    */
+/* - landing: entry đầu tiên khi app nạp — replaceState gắn nhãn,    */
+/*   không đẩy entry mới, nên Back ở landing rời app như bình thường. */
+/* - book: pushState khi vào sổ (null → có bookId).                   */
+/* - sheet: pushState khi một sheet mở (composer / createEvent /      */
+/*   share — cả ba đều render qua Sheet ở shell.tsx, cơ chế lớp đặt   */
+/*   TẠI app.tsx vì đây là nơi duy nhất thấy cả 3 state cùng lúc;     */
+/*   Sheet ở shell.tsx là component trình bày thuần, không tự biết    */
+/*   nó đang ở trên lớp nào). Đóng sheet bằng UI (X / backdrop / Esc  */
+/*   đều qua onClose của Sheet) → history.back() có guard để         */
+/*   popstate handler bỏ qua lần pop tự gây ra đó.                    */
+/* - Back thật (popstate không có guard): đối chiếu nhãn của entry    */
+/*   đích — đích là book → đóng sheet trên cùng; đích là landing →   */
+/*   về landing. Forward cũng đối chiếu tương tự (vào lại sổ/sheet).  */
+/* - Đổi sheet trực tiếp (Ghi khoản → Tạo đám): replaceState đổi     */
+/*   nhãn của lớp sheet trên cùng, không chồng thêm lớp.              */
+/*                                                                    */
+/* Mọi entry do app tạo mang state { sodamNav: 1, layer, bookId,     */
+/* sheet }; entry không mang nhãn này (trang trước khi vào app, hoặc  */
+/* state bị ghi đè) được hiểu là landing khi đối chiếu.               */
+/* ------------------------------------------------------------------ */
+type SodamSheetId = 'composer' | 'createEvent' | 'share';
+type SodamNavLayer = 'landing' | 'book' | 'sheet';
+type SodamNavState = {
+  sodamNav: 1;
+  layer: SodamNavLayer;
+  bookId: string | null;
+  sheet: SodamSheetId | null;
+};
+
+function readNavState(): SodamNavState | null {
+  if (typeof window === 'undefined') return null;
+  const raw = window.history.state as Partial<SodamNavState> | null;
+  if (!raw || raw.sodamNav !== 1) return null;
+  if (raw.layer !== 'landing' && raw.layer !== 'book' && raw.layer !== 'sheet') return null;
+  return {
+    sodamNav: 1,
+    layer: raw.layer,
+    bookId: typeof raw.bookId === 'string' ? raw.bookId : null,
+    sheet:
+      raw.sheet === 'composer' || raw.sheet === 'createEvent' || raw.sheet === 'share'
+        ? raw.sheet
+        : null,
+  };
+}
+
+function navStateFor(
+  layer: SodamNavLayer,
+  bookId: string | null,
+  sheet: SodamSheetId | null = null,
+): SodamNavState {
+  return { sodamNav: 1, layer, bookId, sheet };
+}
 
 export function SodamApp() {
   // PERF-12: RUM console-only — mount đúng 1 lần ở component gốc, dừng khi
@@ -58,6 +125,19 @@ export function SodamApp() {
   const toastId = useRef(0);
   const prevPending = useRef(0);
   const gPending = useRef<string | null>(null);
+  // W3: gương state điều hướng để popstate handler (đăng ký 1 lần) luôn
+  // đọc được giá trị mới nhất mà không phải đăng ký lại listener.
+  const bookIdRef = useRef<string | null>(null);
+  bookIdRef.current = bookId;
+  const sheetStackRef = useRef<SodamSheetId[]>([]);
+  // W3: số lần history.back() do chính app gọi để tiêu thụ lớp khi đóng
+  // bằng UI — popstate tương ứng bị bỏ qua. Guard tự hết hạn sau 1s nếu
+  // vì lý do nào đó không có popstate nào tới (tránh nuốt Back thật sau này).
+  const navGuardRef = useRef(0);
+  const navGuardTimerRef = useRef<number | null>(null);
+  // W3: khôi phục sổ sau reload chỉ chạy MỘT lần lúc mount; sau đó nếu
+  // người dùng chủ động về landing trong phiên thì không tự nhảy lại.
+  const restoreTriedRef = useRef(false);
 
   const pushToast: PushToast = useCallback((message, action) => {
     toastId.current += 1;
@@ -84,20 +164,216 @@ export function SodamApp() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const refreshBooks = useCallback(async () => {
+  const refreshBooks = useCallback(async (): Promise<SodamBook[]> => {
     try {
       const list = await api.listBooks(mode === 'mock' ? [] : knownBookCodes());
       setBooks(list);
       for (const b of list) rememberBook(b.id, b.inviteCode, b.name);
       setError(null);
+      return list;
     } catch (e) {
       if (navigator.onLine) setError(friendlyError(e, 'Lỗi tải sổ'));
+      return [];
     }
   }, [api, mode]);
 
   useEffect(() => {
     void refreshBooks();
   }, [refreshBooks]);
+
+  /* ---------------- W3: điều hướng / Back / khôi phục -------------- */
+
+  // Tiêu thụ `steps` lớp history do chính app vừa đẩy, một cách im lặng:
+  // đánh dấu guard trước khi gọi history.back() để popstate handler biết
+  // đây là lần pop tự gây ra (state React đã được cập nhật ở phía UI rồi).
+  const consumeHistoryLayers = useCallback((steps: number) => {
+    if (steps <= 0) return;
+    navGuardRef.current += steps;
+    if (navGuardTimerRef.current) window.clearTimeout(navGuardTimerRef.current);
+    navGuardTimerRef.current = window.setTimeout(() => {
+      navGuardRef.current = 0;
+      navGuardTimerRef.current = null;
+    }, 1000);
+    window.history.go(-steps);
+  }, []);
+
+  const setSheetOpenRaw = useCallback((id: SodamSheetId, open: boolean) => {
+    if (id === 'composer') setComposerOpen(open);
+    else if (id === 'createEvent') setCreateEventOpen(open);
+    else setShareOpen(open);
+  }, []);
+
+  // Vào sổ (mọi đường: tạo / join / mở từ landing / qua link / khôi phục /
+  // đổi sổ từ rail): ghi lastBookId + đẩy đúng MỘT lớp book khi cần.
+  const enterBook = useCallback((id: string, opts?: { face?: Face }) => {
+    rememberLastBook(id);
+    const prev = bookIdRef.current;
+    setBookId(id);
+    setFace(opts?.face ?? 'overview');
+    const nav = readNavState();
+    if (!prev) {
+      // Đang ở entry landing: đẩy lớp book. Nếu entry hiện tại ĐÃ là
+      // lớp book/sheet của đúng sổ này (reload khi đang trong sổ —
+      // history.state sống qua reload) thì chuẩn hoá về lớp book,
+      // không đẩy trùng.
+      if (nav && nav.bookId === id && nav.layer !== 'landing') {
+        window.history.replaceState(navStateFor('book', id), '');
+      } else {
+        window.history.pushState(navStateFor('book', id), '');
+      }
+    } else if (prev !== id) {
+      // Đổi sổ ngay trong workspace: vẫn một lớp book — sửa nhãn của
+      // entry hiện tại (nếu đang có sheet mở thì giữ nguyên lớp sheet,
+      // chỉ cập nhật bookId trong nhãn của nó ở lần đồng bộ sau).
+      if (nav && nav.layer === 'book') {
+        window.history.replaceState(navStateFor('book', id), '');
+      }
+    }
+  }, []);
+
+  // Về landing do người dùng chủ động (nút Home / Tạo sổ): xoá lastBookId
+  // và tiêu thụ các lớp đã đẩy (sheet nếu còn + book) để Back tiếp theo
+  // ở landing là hành vi trình duyệt bình thường.
+  const goHomeFromUi = useCallback(() => {
+    clearLastBook();
+    const openSheets = sheetStackRef.current.length;
+    sheetStackRef.current = [];
+    setComposerOpen(false);
+    setCreateEventOpen(false);
+    setShareOpen(false);
+    setOverflowOpen(false);
+    setBookId(null);
+    const nav = readNavState();
+    if (nav && nav.layer === 'sheet') consumeHistoryLayers(openSheets + 1);
+    else if (nav && nav.layer === 'book') consumeHistoryLayers(1);
+  }, [consumeHistoryLayers]);
+
+  // Mở sheet = đẩy một lớp sheet lên trên lớp book.
+  const openSheetLayer = useCallback(
+    (id: SodamSheetId) => {
+      if (!sheetStackRef.current.includes(id)) {
+        sheetStackRef.current = [...sheetStackRef.current, id];
+      }
+      setSheetOpenRaw(id, true);
+      const nav = readNavState();
+      if (nav?.layer === 'sheet' && nav.sheet === id) return;
+      window.history.pushState(navStateFor('sheet', bookIdRef.current, id), '');
+    },
+    [setSheetOpenRaw],
+  );
+
+  // Đóng sheet bằng UI (X / backdrop / Esc — tất cả qua onClose): nếu đây
+  // là lớp trên cùng thì tiêu thụ lớp history của nó; đóng sheet không
+  // phải trên cùng (hiếm) thì chỉ sửa lại nhãn của entry trên cùng.
+  const closeSheetFromUi = useCallback(
+    (id: SodamSheetId) => {
+      const stack = sheetStackRef.current;
+      const wasTop = stack[stack.length - 1] === id;
+      sheetStackRef.current = stack.filter((s) => s !== id);
+      setSheetOpenRaw(id, false);
+      const nav = readNavState();
+      if (wasTop && nav?.layer === 'sheet' && nav.sheet === id) {
+        consumeHistoryLayers(1);
+      } else if (nav?.layer === 'sheet' && sheetStackRef.current.length > 0) {
+        const top = sheetStackRef.current[sheetStackRef.current.length - 1];
+        window.history.replaceState(navStateFor('sheet', bookIdRef.current, top), '');
+      }
+    },
+    [consumeHistoryLayers, setSheetOpenRaw],
+  );
+
+  // Đổi thẳng từ sheet này sang sheet khác (Ghi khoản → Tạo đám): giữ
+  // nguyên MỘT lớp sheet, chỉ đổi nhãn — Back sau đó vẫn đóng sheet
+  // đang mở và giữ nguyên workspace.
+  const swapSheetLayer = useCallback(
+    (from: SodamSheetId, to: SodamSheetId) => {
+      sheetStackRef.current = [...sheetStackRef.current.filter((s) => s !== from && s !== to), to];
+      setSheetOpenRaw(from, false);
+      setSheetOpenRaw(to, true);
+      const nav = readNavState();
+      if (nav?.layer === 'sheet') {
+        window.history.replaceState(navStateFor('sheet', bookIdRef.current, to), '');
+      } else {
+        window.history.pushState(navStateFor('sheet', bookIdRef.current, to), '');
+      }
+    },
+    [setSheetOpenRaw],
+  );
+
+  // Gắn nhãn cho entry đầu tiên lúc mount (không đẩy entry mới) + đăng
+  // ký popstate MỘT lần. Nếu entry hiện tại đã mang nhãn của app (reload
+  // giữ nguyên history stack) thì giữ nguyên, chờ khôi phục xử lý tiếp.
+  useEffect(() => {
+    if (!readNavState()) {
+      window.history.replaceState(navStateFor('landing', null), '');
+    }
+    const onPopState = () => {
+      // Pop do chính app gây ra để tiêu thụ lớp khi đóng bằng UI: state
+      // React đã đúng rồi — chỉ việc trừ guard.
+      if (navGuardRef.current > 0) {
+        navGuardRef.current -= 1;
+        if (navGuardRef.current === 0 && navGuardTimerRef.current) {
+          window.clearTimeout(navGuardTimerRef.current);
+          navGuardTimerRef.current = null;
+        }
+        return;
+      }
+      const nav = readNavState();
+      const targetBookId = nav && nav.layer !== 'landing' ? nav.bookId : null;
+      const targetSheet = nav?.layer === 'sheet' ? nav.sheet : null;
+      // Đồng bộ sheet: đóng mọi sheet khác sheet đích, mở sheet đích.
+      const nextStack: SodamSheetId[] = targetSheet ? [targetSheet] : [];
+      for (const id of sheetStackRef.current) {
+        if (!nextStack.includes(id)) setSheetOpenRaw(id, false);
+      }
+      if (targetSheet && !sheetStackRef.current.includes(targetSheet)) {
+        setSheetOpenRaw(targetSheet, true);
+      }
+      sheetStackRef.current = nextStack;
+      // Đồng bộ sổ: đích landing → về landing (và xoá lastBookId như khi
+      // bấm Home); đích có sổ → vào lại sổ đó (đường Forward).
+      if (targetBookId) {
+        rememberLastBook(targetBookId);
+        if (bookIdRef.current !== targetBookId) setBookId(targetBookId);
+      } else {
+        clearLastBook();
+        if (bookIdRef.current) setBookId(null);
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [setSheetOpenRaw]);
+
+  // W3 (6.3): khôi phục sổ sau reload — chạy đúng một lần lúc mount.
+  // Điều kiện: chưa có sổ nào mở, URL không có ?code= (link chia sẻ có
+  // đường vào riêng và thắng khôi phục), lastBookId còn trong registry
+  // của máy VÀ đối chiếu được với danh sách sổ server trả về (mock mode:
+  // registry là nguồn đối chiếu vì listBooks mock không nhận codes).
+  useEffect(() => {
+    if (restoreTriedRef.current) return;
+    restoreTriedRef.current = true;
+    if (bookIdRef.current) return;
+    if (new URLSearchParams(window.location.search).get('code')) return;
+    const last = lastBookId();
+    if (!last) return;
+    if (!knownBooks().some((b) => b.id === last)) {
+      clearLastBook();
+      return;
+    }
+    void (async () => {
+      const list = await refreshBooks();
+      const confirmed =
+        mode === 'mock' ? knownBooks().some((b) => b.id === last) : list.some((b) => b.id === last);
+      if (!confirmed) {
+        // Sổ không còn đối chiếu được (đã bị xoá / mã đã xoay và registry
+        // lệch) — dọn lastBookId để các lần nạp sau không thử lại vô ích.
+        if (list.length > 0 || mode !== 'mock') clearLastBook();
+        return;
+      }
+      if (bookIdRef.current) return; // người dùng/link đã vào sổ khác trong lúc chờ
+      enterBook(last);
+    })();
+  }, [refreshBooks, enterBook, mode]);
 
   // Dữ liệu cấp workspace: dashboard (tổng + đám đang mở + số chờ trả) + danh sách đám.
   const reloadWorkspace = useCallback(async () => {
@@ -131,8 +407,7 @@ export function SodamApp() {
         const book = await api.joinBook(code);
         rememberBook(book.id, book.inviteCode, book.name);
         await refreshBooks();
-        setBookId(book.id);
-        setFace('overview');
+        enterBook(book.id);
       } catch {
         setLinkJoinError({
           code,
@@ -140,12 +415,15 @@ export function SodamApp() {
             'Không tìm thấy sổ với mã này — kiểm tra lại mã hoặc mở link chia sẻ là vào thẳng.',
         });
       } finally {
+        // Xoá ?code khỏi URL nhưng GIỮ nhãn lớp history của entry hiện
+        // tại (W3): replaceState không đổi state sẽ xoá nhãn book vừa
+        // đẩy khi vào sổ qua link, làm Back sau đó mất lớp để đối chiếu.
         const url = new URL(window.location.href);
         url.searchParams.delete('code');
-        window.history.replaceState(null, '', url.toString());
+        window.history.replaceState(window.history.state, '', url.toString());
       }
     })();
-  }, [api, refreshBooks]);
+  }, [api, refreshBooks, enterBook]);
 
   const activeBook = books.find((b) => b.id === bookId) ?? null;
 
@@ -171,9 +449,9 @@ export function SodamApp() {
     (eventId?: string | null) => {
       const target = eventId ?? activeEventId ?? dash?.openEvent?.id ?? events[0]?.id ?? null;
       setComposerEventId(target);
-      setComposerOpen(true);
+      openSheetLayer('composer');
     },
-    [activeEventId, dash, events],
+    [activeEventId, dash, events, openSheetLayer],
   );
 
   // Phím tắt desktop — chỉ trong workspace, không khi đang gõ.
@@ -240,8 +518,7 @@ export function SodamApp() {
               const book = await api.createBook(name);
               rememberBook(book.id, book.inviteCode, book.name);
               await refreshBooks();
-              setBookId(book.id);
-              setFace('overview');
+              enterBook(book.id);
               return null;
             } catch (e) {
               if (!navigator.onLine) {
@@ -255,8 +532,7 @@ export function SodamApp() {
               const book = await api.joinBook(code.trim());
               rememberBook(book.id, book.inviteCode, book.name);
               await refreshBooks();
-              setBookId(book.id);
-              setFace('overview');
+              enterBook(book.id);
               return null;
             } catch {
               return 'Không tìm thấy sổ với mã này — kiểm tra lại mã hoặc mở link chia sẻ là vào thẳng.';
@@ -270,8 +546,7 @@ export function SodamApp() {
               return;
             }
             setError(null);
-            setBookId(id);
-            setFace('overview');
+            enterBook(id);
           }}
           error={error}
         />
@@ -303,7 +578,7 @@ export function SodamApp() {
       <button
         type="button"
         onClick={() => {
-          setShareOpen(true);
+          openSheetLayer('share');
           setOverflowOpen(false);
         }}
         aria-expanded={shareOpen}
@@ -321,11 +596,11 @@ export function SodamApp() {
           (Sheet lo scrim bg-ink/45 phủ kín) — hết cảnh panel lơ lửng hở
           mép, nền lòi chữ cụt quanh panel như dropdown cũ. */}
       {shareOpen ? (
-        <Sheet open title={`Chia sẻ sổ`} onClose={() => setShareOpen(false)}>
+        <Sheet open title={`Chia sẻ sổ`} onClose={() => closeSheetFromUi('share')}>
           <SharePanel
             api={api}
             book={activeBook}
-            onClose={() => setShareOpen(false)}
+            onClose={() => closeSheetFromUi('share')}
             onRotated={(b) => {
               setBooks((prev) =>
                 prev.map((x) => (x.id === b.id ? { ...x, inviteCode: b.inviteCode } : x)),
@@ -345,7 +620,7 @@ export function SodamApp() {
         type="button"
         onClick={() => {
           setOverflowOpen((v) => !v);
-          setShareOpen(false);
+          if (shareOpen) closeSheetFromUi('share');
         }}
         aria-expanded={overflowOpen}
         aria-label="Thêm tuỳ chọn cho sổ"
@@ -434,8 +709,7 @@ export function SodamApp() {
         returnsBadge={dash?.openReturnCount || undefined}
         suppressChromeAccent={suppressAccent}
         onSelectBook={(id) => {
-          setBookId(id);
-          setFace('overview');
+          enterBook(id);
           setSearchQuery('');
         }}
         onSelectEvent={(id) => {
@@ -443,9 +717,9 @@ export function SodamApp() {
           setFace('event');
         }}
         onFace={(f) => setFace(f)}
-        onHome={() => setBookId(null)}
-        onCreateBook={() => setBookId(null)}
-        onCreateEvent={() => setCreateEventOpen(true)}
+        onHome={goHomeFromUi}
+        onCreateBook={goHomeFromUi}
+        onCreateEvent={() => openSheetLayer('createEvent')}
         totalsStrip={
           // F10 (Panel R1): cắt khối tổng toàn sổ khỏi mặt Người và Cây
           // họ — ở đó nó là nghi lễ lặp, không phục vụ việc đang làm.
@@ -505,7 +779,7 @@ export function SodamApp() {
                 setActiveEventId(id);
                 setFace('event');
               }}
-              onCreateEvent={() => setCreateEventOpen(true)}
+              onCreateEvent={() => openSheetLayer('createEvent')}
               onSeeReturns={(eventId) => {
                 setReturnsEventFilter(eventId);
                 setFace('returns');
@@ -579,13 +853,24 @@ export function SodamApp() {
         open={createEventOpen}
         api={api}
         bookId={bookId}
-        onClose={() => setCreateEventOpen(false)}
+        onClose={() => closeSheetFromUi('createEvent')}
         onCreated={(ev, ghiNgay) => {
-          setCreateEventOpen(false);
-          setActiveEventId(ev.id);
-          void reloadWorkspace();
-          if (ghiNgay) openComposer(ev.id);
-          else setFace('event');
+          // Tạo xong mà ghi ngay: lớp sheet Tạo đám BIẾN THÀNH lớp Ghi
+          // khoản (swap nhãn history, không chồng thêm lớp) để Back sau
+          // đó đóng Ghi khoản về đúng workspace. openComposer ở đây chỉ
+          // chốt composerEventId — lớp sheet đã được swap lo phần history
+          // (openSheetLayer thấy nhãn đã khớp nên không đẩy trùng).
+          if (ghiNgay) {
+            swapSheetLayer('createEvent', 'composer');
+            setActiveEventId(ev.id);
+            void reloadWorkspace();
+            openComposer(ev.id);
+          } else {
+            closeSheetFromUi('createEvent');
+            setActiveEventId(ev.id);
+            void reloadWorkspace();
+            setFace('event');
+          }
         }}
         onError={setError}
       />
@@ -599,12 +884,9 @@ export function SodamApp() {
           online={online}
           enqueue={enqueue}
           onEnqueued={(g) => setGhosts((prev) => [...prev, g])}
-          onClose={() => setComposerOpen(false)}
+          onClose={() => closeSheetFromUi('composer')}
           onSaved={() => void reloadWorkspace()}
-          onCreateEvent={() => {
-            setComposerOpen(false);
-            setCreateEventOpen(true);
-          }}
+          onCreateEvent={() => swapSheetLayer('composer', 'createEvent')}
         />
       ) : null}
 
