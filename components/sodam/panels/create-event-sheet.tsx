@@ -100,10 +100,7 @@ export function CreateEventSheet({
     }>(eventDraftKey);
     if (saved) {
       if (typeof saved.title === 'string') setTitle(saved.title);
-      if (
-        typeof saved.kind === 'string' &&
-        (EVENT_KIND_ORDER as string[]).includes(saved.kind)
-      ) {
+      if (typeof saved.kind === 'string' && (EVENT_KIND_ORDER as string[]).includes(saved.kind)) {
         setKind(saved.kind as SodamEventKind);
       }
       if (saved.role === 'HOSTED' || saved.role === 'ATTENDED') setRole(saved.role);
