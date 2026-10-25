@@ -127,8 +127,14 @@ export function SodamApp() {
   const gPending = useRef<string | null>(null);
   // W3: gương state điều hướng để popstate handler (đăng ký 1 lần) luôn
   // đọc được giá trị mới nhất mà không phải đăng ký lại listener.
+  // Gương qua effect (chạy sau mỗi render) — KHÔNG gán ref ngay trong
+  // thân render: react-hooks/refs (eslint-config-next 16) cấm mutate
+  // ref lúc render; popstate chỉ tới sau khi effect đã chạy nên hành
+  // vi không đổi.
   const bookIdRef = useRef<string | null>(null);
-  bookIdRef.current = bookId;
+  useEffect(() => {
+    bookIdRef.current = bookId;
+  });
   const sheetStackRef = useRef<SodamSheetId[]>([]);
   // W3: số lần history.back() do chính app gọi để tiêu thụ lớp khi đóng
   // bằng UI — popstate tương ứng bị bỏ qua. Guard tự hết hạn sau 1s nếu
