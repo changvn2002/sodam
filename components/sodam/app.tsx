@@ -513,49 +513,51 @@ export function SodamApp() {
   if (!bookId) {
     return (
       <>
-        <HomeView
-          api={api}
-          books={books}
-          online={online}
-          linkJoinError={linkJoinError}
-          onRetryBooks={() => void refreshBooks()}
-          onCreate={async (name) => {
-            try {
-              const book = await api.createBook(name);
-              rememberBook(book.id, book.inviteCode, book.name);
-              await refreshBooks();
-              enterBook(book.id);
-              return null;
-            } catch (e) {
-              if (!navigator.onLine) {
-                return 'Chưa có mạng — chưa tạo được sổ. Tên sổ đã được giữ lại, bấm Thử lại khi có mạng.';
+        <main>
+          <HomeView
+            api={api}
+            books={books}
+            online={online}
+            linkJoinError={linkJoinError}
+            onRetryBooks={() => void refreshBooks()}
+            onCreate={async (name) => {
+              try {
+                const book = await api.createBook(name);
+                rememberBook(book.id, book.inviteCode, book.name);
+                await refreshBooks();
+                enterBook(book.id);
+                return null;
+              } catch (e) {
+                if (!navigator.onLine) {
+                  return 'Chưa có mạng — chưa tạo được sổ. Tên sổ đã được giữ lại, bấm Thử lại khi có mạng.';
+                }
+                return friendlyError(e, 'Chưa tạo được sổ — thử lại sau ít phút.');
               }
-              return friendlyError(e, 'Chưa tạo được sổ — thử lại sau ít phút.');
-            }
-          }}
-          onJoin={async (code) => {
-            try {
-              const book = await api.joinBook(code.trim());
-              rememberBook(book.id, book.inviteCode, book.name);
-              await refreshBooks();
-              enterBook(book.id);
-              return null;
-            } catch {
-              return 'Không tìm thấy sổ với mã này — kiểm tra lại mã hoặc mở link chia sẻ là vào thẳng.';
-            }
-          }}
-          onOpen={(id) => {
-            if (!online) {
-              setError(
-                'Cần có mạng để mở sổ này. Sổ của bạn vẫn an toàn trên hệ thống — mở lại khi có mạng là thấy tiếp.',
-              );
-              return;
-            }
-            setError(null);
-            enterBook(id);
-          }}
-          error={error}
-        />
+            }}
+            onJoin={async (code) => {
+              try {
+                const book = await api.joinBook(code.trim());
+                rememberBook(book.id, book.inviteCode, book.name);
+                await refreshBooks();
+                enterBook(book.id);
+                return null;
+              } catch {
+                return 'Không tìm thấy sổ với mã này — kiểm tra lại mã hoặc mở link chia sẻ là vào thẳng.';
+              }
+            }}
+            onOpen={(id) => {
+              if (!online) {
+                setError(
+                  'Cần có mạng để mở sổ này. Sổ của bạn vẫn an toàn trên hệ thống — mở lại khi có mạng là thấy tiếp.',
+                );
+                return;
+              }
+              setError(null);
+              enterBook(id);
+            }}
+            error={error}
+          />
+        </main>
         <ToastStack toasts={toasts} onDismiss={dismissToast} />
       </>
     );
@@ -770,7 +772,7 @@ export function SodamApp() {
           </Btn>
         }
       >
-        <div
+        <main
           key={`${face}-${activeEventId ?? ''}`}
           className="animate-face flex min-h-0 flex-1 flex-col"
         >
@@ -852,7 +854,7 @@ export function SodamApp() {
               onError={setError}
             />
           ) : null}
-        </div>
+        </main>
       </WorkspaceShell>
 
       <CreateEventSheet
