@@ -12,12 +12,12 @@ import { cn } from '@/lib/utils';
 /* @dicebear/collection), sinh 100% tại client, ZERO HTTP: không       */
 /* gọi HTTP API bên thứ ba, danh tính không rời thiết bị, offline.     */
 /*                                                                     */
-/* Điều kiện phiên bản: collection 9.4.2 là styles cho API core 9      */
+/* Điều kiện phiên bản: collection 9.4.3 là styles cho API core 9      */
 /* (`createAvatar`); core 10 đã bỏ API đó nên package.json PHẢI ghim   */
 /* @dicebear/core ^9.4.3 (đúng bản chiatien đang chạy).                */
 /*                                                                     */
 /* Bằng chứng đã đọc từ node_modules:                                  */
-/* - @dicebear/initials 9.4.2, lib/types.d.ts: Options =               */
+/* - @dicebear/initials 9.4.3, lib/types.d.ts: Options =               */
 /*   { backgroundColor, textColor, fontFamily, fontSize, chars,       */
 /*   fontWeight } — KHÔNG có option tách "chữ cái hiển thị" khỏi seed. */
 /* - lib/index.js của style: `getInitials(prng.seed.trim())` — glyph   */

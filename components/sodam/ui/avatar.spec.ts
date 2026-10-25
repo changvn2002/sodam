@@ -5,7 +5,7 @@ import { initialsDataUri } from './avatar';
 /**
  * PersonAvatar initials — local, deterministic, zero-HTTP.
  *
- * The initials style (@dicebear/initials 9.4.2, lib/index.js) derives
+ * The initials style (@dicebear/initials 9.4.3, lib/index.js) derives
  * its glyph from the seed alone (`getInitials(prng.seed.trim())`), so
  * the helper feeds it the person's real name for the glyph and pins
  * the background from the stable entity seed/id instead.

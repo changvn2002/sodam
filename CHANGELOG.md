@@ -9,6 +9,12 @@ phát hành gắn tag `vX.Y.Z` lên đúng commit đang chạy production và gh
 một dòng vào bảng cặp ở cuối file này: phiên bản → commit SHA → ngày
 deploy. "Về bản vX.Y.Z" khi rollback nghĩa là về commit của tag đó.
 
+## [Unreleased] — 2026-10-26 — Hiệu chuẩn coverage thresholds theo vitest 4 (SEC-10)
+
+### Changed
+
+- **Hiệu chuẩn thresholds coverage trong `vitest.config.ts` (CQ-06):** sau khi nâng lên vitest 4.1.12, đo lại ngày 2026-10-26 (suite đầy đủ 169 test): statements 33.25% / branches 24.86% / functions 28.85% / lines 33.97%. Ngưỡng cũ → mới: statements 27 → 31, branches 70 → 22, functions 75 → 26, lines 27 → 31 (ngưỡng = ceil(số đo − 3); hiệu đo − ngưỡng lần lượt 2.25 / 2.86 / 2.85 / 2.97 — trong biên [2, 3]). Lý do hạ branches/functions: vitest 4 đổi cách đếm coverage — mẫu số phình so với v3 (đo lần này branches 2304, functions 745; hồ sơ XAPP-2 ghi branches 724→2080, functions 196→708 trên cây 161 test) nên tỉ lệ % giảm dù số test tăng 161→169. Nâng ngưỡng khi thêm test; hạ ngưỡng phải có lý do — mục này là lý do của lần hạ này.
+
 ## [1.3.0] — 2026-10-25 — Thiết kế lại «Trang Sổ Kẻ» (lệnh user 2026-10-24)
 
 ### Changed
